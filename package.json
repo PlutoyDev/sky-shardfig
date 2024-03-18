@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "dev": "tsc -w && node --env-file=.env --watch-path=.env --watch-path=./dist compiled/index.js",
     "build": "tsc && node --env-file=.env compiled/index.js"
@@ -11,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/node": "^20.11.28",
     "@upstash/redis": "^1.28.4",
     "typescript": "^5.4.2"
   }
