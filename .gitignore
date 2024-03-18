@@ -1,6 +1,7 @@
 node_modules
 
 compiled
-dist
+dist/prettified.json
+dist/minified.json
 .env
 tsconfig.tsbuildinfo
