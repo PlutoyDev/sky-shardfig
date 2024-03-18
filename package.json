@@ -12,9 +12,12 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/luxon": "^3.4.2",
     "@types/node": "^20.11.28",
     "@upstash/redis": "^1.28.4",
+    "axios": "^1.6.8",
     "concurrently": "^8.2.2",
+    "luxon": "^3.4.4",
     "typescript": "^5.4.2"
   }
 }
