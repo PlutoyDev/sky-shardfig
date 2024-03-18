@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently --raw \"tsc -w --preserveWatchOutput\" \"node --env-file=.env --watch-preserve-output --watch-path=.env --watch-path=./compiled compiled/src/index.js\"",
-    "build": "tsc && node --env-file=.env compiled/src/index.js"
+    "buildLocal": "tsc && node --env-file=.env compiled/src/index.js",
+    "build": "tsc && node compiled/src/index.js"
   },
   "keywords": [],
   "author": "",
