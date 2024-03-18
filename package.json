@@ -9,5 +9,9 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@upstash/redis": "^1.28.4",
+    "typescript": "^5.4.2"
+  }
 }
