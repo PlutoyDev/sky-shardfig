@@ -1,5 +1,5 @@
 import { Redis } from '@upstash/redis';
-import type { GlobalShardConfig } from './types.js';
+import type { GlobalShardConfig } from '../shared/types.js';
 import { DateTime } from 'luxon';
 import axios from 'axios';
 import { mkdir, writeFile } from 'fs/promises';
