@@ -12,12 +12,16 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240314.0",
+    "@discordjs/rest": "^2.2.0",
     "@types/luxon": "^3.4.2",
     "@types/node": "^20.11.28",
     "@upstash/redis": "^1.28.4",
     "axios": "^1.6.8",
     "concurrently": "^8.2.2",
+    "discord-api-types": "^0.37.75",
     "luxon": "^3.4.4",
+    "tweetnacl": "^1.0.3",
     "typescript": "^5.4.2"
   }
 }
