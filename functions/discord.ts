@@ -229,6 +229,78 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
           },
         });
       }
+
+      // Set Daily Is Bugged
+      if (name === 'set_bugged_status') {
+        const isBugged = optionsMap.get(
+          'is_bugged'
+        ) as APIApplicationCommandInteractionDataBooleanOption;
+        const bugType = optionsMap.get(
+          'bug_type'
+        ) as APIApplicationCommandInteractionDataStringOption;
+
+        if (!isBugged) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: { content: 'is_bugged option is required' },
+          });
+        } else if (!bugType) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: { content: 'bug_type option is required' },
+          });
+        }
+
+        if (isBugged.value) {
+          if (!['noShard', 'noMemory'].includes(bugType.value)) {
+            return InteractionResponse({
+              type: InteractionResponseType.ChannelMessageWithSource,
+              data: { content: 'bug_type is required' },
+            });
+          }
+
+          const {
+            isBugged: prevIsBugged,
+            bugType: prevBugType,
+            lastModifiedBy,
+          } = await redis.hmget(
+            `daily:${isoDate}`,
+            'isBugged',
+            'bugType',
+            'lastModifiedBy'
+          );
+
+          const newLastModifiedBy = lastModifiedBy
+            ? (lastModifiedBy as string).includes(resovledName)
+              ? lastModifiedBy
+              : `${lastModifiedBy}, ${resovledName}`
+            : resovledName;
+
+          await redis.hset(`daily:${isoDate}`, {
+            isBugged: true,
+            bugType: bugType.value,
+            lastModified: DateTime.now(),
+            lastModifiedBy: newLastModifiedBy,
+          });
+
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: {
+              content:
+                `Shard for ${isoDate} has been set as bugged (${bugType.value})` +
+                (prevIsBugged ? ` from ${prevBugType}` : 'from (unset)'),
+            },
+          });
+        } else {
+          await redis.hdel(`daily:${isoDate}`, 'isBugged', 'bugType');
+
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: {
+              content: `Shard for ${isoDate} has been set as not bugged`,
+            },
+          });
+        }
       }
     }
   }
