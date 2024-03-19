@@ -55,7 +55,10 @@ try {
   console.log('Fetched previous config', Object.keys(prevConfig.dailyMap));
   Object.assign(globalShardConfig.dailyMap, prevConfig.dailyMap);
 } catch (err) {
-  console.error('Failed to fetch previous config', err);
+  console.error(
+    'Failed to fetch previous config:',
+    err && typeof err === 'object' && 'message' in err ? err.message : err
+  );
 }
 
 // Today in America/Los_Angeles timezone
@@ -135,5 +138,8 @@ try {
     await redis.set('discordMessageId', res.data.id);
   }
 } catch (err) {
-  console.error('Failed to update Discord Embed', err);
+  console.error(
+    'Failed to update Discord Embed',
+    err && typeof err === 'object' && 'message' in err ? err.message : err
+  );
 }
