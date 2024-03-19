@@ -1,5 +1,4 @@
 import { Redis } from '@upstash/redis/cloudflare';
-import { REST } from '@discordjs/rest';
 import type {
   APIInteraction,
   APIInteractionResponse,
@@ -23,7 +22,7 @@ interface RequiredEnv {
 // Environment variables are injected at build time, so cannot destructured, cannot access with []
 
 function valueToUint8Array(
-  value: Uint8Array | ArrayBuffer | Buffer | string,
+  value: Uint8Array | ArrayBuffer | string,
   format?: string
 ): Uint8Array {
   if (value == null) {
@@ -41,13 +40,6 @@ function valueToUint8Array(
       return new TextEncoder().encode(value);
     }
   }
-  try {
-    if (Buffer.isBuffer(value)) {
-      return new Uint8Array(value);
-    }
-  } catch (ex) {
-    // Runtime doesn't have Buffer
-  }
   if (value instanceof ArrayBuffer) {
     return new Uint8Array(value);
   }
@@ -57,6 +49,13 @@ function valueToUint8Array(
   throw new Error(
     'Unrecognized value type, must be one of: string, Buffer, ArrayBuffer, Uint8Array'
   );
+}
+
+function InteractionResponse(response: APIInteractionResponse): Response {
+  return new Response(JSON.stringify(response), {
+    headers: { 'Content-Type': 'application/json' },
+    status: 200,
+  });
 }
 
 export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
@@ -82,25 +81,12 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
     });
   }
 
-  // Discord.js REST Client
-  const rest = new REST({ version: '10' }).setToken(
-    context.env.DISCORD_CLIENT_SECRET
-  );
-
   // Handle Interaction
   const interaction = JSON.parse(body) as APIInteraction;
 
   // Ping Pong (Checked by Discord)
   if (interaction.type === InteractionType.Ping) {
-    return new Response(JSON.stringify({ type: 1 }), { status: 200 });
-    // await rest.post(
-    //   Routes.interactionCallback(interaction.id, interaction.token),
-    //   {
-    //     body: {
-    //       type: InteractionResponseType.Pong,
-    //     } satisfies APIInteractionResponse,
-    //   }
-    // );
+    return InteractionResponse({ type: InteractionResponseType.Pong });
   }
 
   // Always return 200 OK
