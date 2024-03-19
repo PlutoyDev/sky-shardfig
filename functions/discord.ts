@@ -92,14 +92,15 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
 
   // Ping Pong (Checked by Discord)
   if (interaction.type === InteractionType.Ping) {
-    await rest.post(
-      Routes.interactionCallback(interaction.id, interaction.token),
-      {
-        body: {
-          type: InteractionResponseType.Pong,
-        } satisfies APIInteractionResponse,
-      }
-    );
+    return new Response(JSON.stringify({ type: 1 }), { status: 200 });
+    // await rest.post(
+    //   Routes.interactionCallback(interaction.id, interaction.token),
+    //   {
+    //     body: {
+    //       type: InteractionResponseType.Pong,
+    //     } satisfies APIInteractionResponse,
+    //   }
+    // );
   }
 
   // Always return 200 OK
