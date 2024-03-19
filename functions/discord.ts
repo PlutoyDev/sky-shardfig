@@ -69,5 +69,6 @@ export const onRequest: PagesFunction<RequiredEnv> = async context => {
   if (url.pathname === '/discord' && request.method === 'POST') {
     return discord(context);
   }
+  console.error('Not Found:', request.url, request.method);
   return new Response('Not Found', { status: 404 });
 };
