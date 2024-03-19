@@ -119,6 +119,28 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
   // Handle Command
   if (interaction.type === InteractionType.ApplicationCommand) {
     if (interaction.data.type === ApplicationCommandType.ChatInput) {
+      // Slash Command
+      const { name, options } = interaction.data;
+      const optionsMap = new Map(options.map(option => [option.name, option]));
+
+      let isoDate = DateTime.now().setZone('America/Los_Angeles').toISODate();
+      const dateInput = optionsMap.get('date') as
+        | APIApplicationCommandInteractionDataStringOption
+        | undefined;
+
+      if (dateInput) {
+        // Verify Date
+        const date = DateTime.fromISO(dateInput.value);
+        if (!date.isValid) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: {
+              content: 'Invalid date',
+            },
+          });
+        }
+        isoDate = date.toISODate();
+      }
     }
   }
   // Always return 200 OK
