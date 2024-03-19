@@ -89,6 +89,27 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
     return InteractionResponse({ type: InteractionResponseType.Pong });
   }
 
+  const { guild_id, channel, member } = interaction;
+
+  if (!guild_id || !member || guild_id !== '1219255956207046727') {
+    return InteractionResponse({
+      type: InteractionResponseType.ChannelMessageWithSource,
+      data: {
+        content: 'This bot is not allowed in this server',
+        flags: MessageFlags.Ephemeral,
+      },
+    });
+  }
+
+  if (channel.id !== '1219629213238296676') {
+    return InteractionResponse({
+      type: InteractionResponseType.ChannelMessageWithSource,
+      data: {
+        content: 'This command is not allowed in this channel',
+        flags: MessageFlags.Ephemeral,
+      },
+    });
+  }
   // Always return 200 OK
   return new Response('OK', { status: 200 });
 };
