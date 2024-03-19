@@ -22,6 +22,43 @@ interface RequiredEnv {
 }
 // Environment variables are injected at build time, so cannot destructured, cannot access with []
 
+function valueToUint8Array(
+  value: Uint8Array | ArrayBuffer | Buffer | string,
+  format?: string
+): Uint8Array {
+  if (value == null) {
+    return new Uint8Array();
+  }
+  if (typeof value === 'string') {
+    if (format === 'hex') {
+      const matches = value.match(/.{1,2}/g);
+      if (matches == null) {
+        throw new Error('Value is not a valid hex string');
+      }
+      const hexVal = matches.map((byte: string) => parseInt(byte, 16));
+      return new Uint8Array(hexVal);
+    } else {
+      return new TextEncoder().encode(value);
+    }
+  }
+  try {
+    if (Buffer.isBuffer(value)) {
+      return new Uint8Array(value);
+    }
+  } catch (ex) {
+    // Runtime doesn't have Buffer
+  }
+  if (value instanceof ArrayBuffer) {
+    return new Uint8Array(value);
+  }
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+  throw new Error(
+    'Unrecognized value type, must be one of: string, Buffer, ArrayBuffer, Uint8Array'
+  );
+}
+
 export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
   // Request Validation (Check if request is from Discord)
   const request = context.request;
@@ -34,9 +71,9 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
   }
   const body = await request.text();
   const isVerified = nacl.sign.detached.verify(
-    Buffer.from(timestamp + body),
-    Buffer.from(signature, 'hex'),
-    Buffer.from(context.env.DISCORD_PUBLIC_KEY, 'hex')
+    valueToUint8Array(timestamp + body),
+    valueToUint8Array(signature, 'hex'),
+    valueToUint8Array(context.env.DISCORD_PUBLIC_KEY, 'hex')
   );
 
   if (!isVerified) {
