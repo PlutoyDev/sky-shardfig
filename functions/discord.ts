@@ -1,5 +1,7 @@
 import { Redis } from '@upstash/redis/cloudflare';
 import type {
+  APIApplicationCommandInteractionDataBooleanOption,
+  APIApplicationCommandInteractionDataStringOption,
   APIInteraction,
   APIInteractionResponse,
 } from 'discord-api-types/v10';
@@ -7,9 +9,13 @@ import {
   Routes,
   InteractionType,
   InteractionResponseType,
+  MessageFlags,
+  ApplicationCommandType,
 } from 'discord-api-types/v10';
 import nacl from 'tweetnacl';
-import { GlobalShardConfig } from '../shared/types';
+import { DateTime } from 'luxon';
+import { getGlobalShardConfig, getDailyShardConfig } from '../shared/lib.js';
+import { memories, type GlobalShardConfig } from '../shared/types.js';
 
 interface RequiredEnv {
   UPSTASH_REDIS_REST_URL: string;
@@ -116,6 +122,8 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
     token: context.env.UPSTASH_REDIS_REST_TOKEN,
   });
 
+  const resovledName = member.nick ?? member.user.username;
+
   // Handle Command
   if (interaction.type === InteractionType.ApplicationCommand) {
     if (interaction.data.type === ApplicationCommandType.ChatInput) {
@@ -123,23 +131,104 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
       const { name, options } = interaction.data;
       const optionsMap = new Map(options.map(option => [option.name, option]));
 
-      let isoDate = DateTime.now().setZone('America/Los_Angeles').toISODate();
+      let date = DateTime.now().setZone('America/Los_Angeles');
       const dateInput = optionsMap.get('date') as
         | APIApplicationCommandInteractionDataStringOption
         | undefined;
 
       if (dateInput) {
         // Verify Date
-        const date = DateTime.fromISO(dateInput.value);
-        if (!date.isValid) {
+        const dateIn = DateTime.fromISO(dateInput.value);
+        if (!dateIn.isValid) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: { content: 'Invalid date' },
+          });
+        }
+        date = dateIn;
+      }
+      const isoDate = date.toISODate();
+
+      // Set Daily Memory
+      if (name === 'set_memory') {
+        const memory = optionsMap.get(
+          'memory'
+        ) as APIApplicationCommandInteractionDataStringOption;
+        if (!memory || !memories.includes(memory.value as any)) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: { content: 'Invalid memory option' },
+          });
+        }
+        const memoryValue = memory.value;
+        const { memory: prevMem, lastModifiedBy } = await redis.hmget(
+          `daily:${isoDate}`,
+          'memory',
+          'lastModifiedBy'
+        );
+        const newLastModifiedBy = lastModifiedBy
+          ? (lastModifiedBy as string).includes(resovledName)
+            ? lastModifiedBy
+            : `${lastModifiedBy}, ${resovledName}`
+          : resovledName;
+
+        await redis.hset(`daily:${isoDate}`, {
+          memory: memoryValue,
+          lastModified: DateTime.now(),
+          lastModifiedBy: newLastModifiedBy,
+        });
+        return InteractionResponse({
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: {
+            content:
+              `Memory for ${isoDate} has been changed from ` +
+              `${prevMem ?? '`unset`'} to \`${memoryValue}\``,
+          },
+        });
+      }
+
+      // Set Daily Variation
+      if (name === 'set_variation') {
+        const variation = optionsMap.get(
+          'variation'
+        ) as APIApplicationCommandInteractionDataStringOption;
+        if (!variation) {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
             data: {
-              content: 'Invalid date',
+              content: 'Invalid variation option',
             },
           });
         }
-        isoDate = date.toISODate();
+        const variationValue = variation.value;
+
+        const { variation: prevVar, lastModifiedBy } = await redis.hmget(
+          `daily:${isoDate}`,
+          'variation',
+          'lastModifiedBy'
+        );
+
+        const newLastModifiedBy = lastModifiedBy
+          ? (lastModifiedBy as string).includes(resovledName)
+            ? lastModifiedBy
+            : `${lastModifiedBy}, ${resovledName}`
+          : resovledName;
+
+        await redis.hset(`daily:${isoDate}`, {
+          variation: variationValue,
+          lastModified: DateTime.now(),
+          lastModifiedBy: newLastModifiedBy,
+        });
+
+        return InteractionResponse({
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: {
+            content:
+              `Variation for ${isoDate} has been changed from ` +
+              `${prevVar ?? '`unset`'} to \`${variationValue}\``,
+          },
+        });
+      }
       }
     }
   }
