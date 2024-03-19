@@ -50,8 +50,8 @@ interface RequiredEnv {
 }
 // Environment variables are injected at build time, so cannot destructured, cannot access with []
 
-export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
-  // Request Validation (Check if request is from Discord)
+// /discord endpoint
+const discord: PagesFunction<RequiredEnv> = async context => {
   const request = context.request;
   const signature = request.headers.get('X-Signature-Ed25519');
   const timestamp = request.headers.get('X-Signature-Timestamp');
@@ -89,9 +89,13 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
       } satisfies APIInteractionResponse,
     });
   }
+};
 
-  // const redis = new Redis({
-  //   url: context.env.UPSTASH_REDIS_REST_URL,
-  //   token: context.env.UPSTASH_REDIS_REST_TOKEN,
-  // });
+export const onRequest: PagesFunction<RequiredEnv> = async context => {
+  const request = context.request;
+  const url = new URL(request.url);
+  if (url.pathname === '/discord' && request.method === 'POST') {
+    return discord(context);
+  }
+  return new Response('Not Found', { status: 404 });
 };
