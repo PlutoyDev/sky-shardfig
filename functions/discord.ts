@@ -116,6 +116,11 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
     token: context.env.UPSTASH_REDIS_REST_TOKEN,
   });
 
+  // Handle Command
+  if (interaction.type === InteractionType.ApplicationCommand) {
+    if (interaction.data.type === ApplicationCommandType.ChatInput) {
+    }
+  }
   // Always return 200 OK
   return new Response('OK', { status: 200 });
 };
