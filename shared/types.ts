@@ -7,7 +7,7 @@ export const memories = [
   'elder',
 ] as const;
 
-interface DailyShardConfig {
+export interface DailyShardConfig {
   memory?: (typeof memories)[number];
   variation?: string;
   isBugged?: boolean;

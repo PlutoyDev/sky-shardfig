@@ -3,6 +3,7 @@ import type { GlobalShardConfig } from '../shared/types.js';
 import { DateTime } from 'luxon';
 import axios from 'axios';
 import { mkdir, writeFile } from 'fs/promises';
+import { getGlobalShardConfig, getDailyShardConfig } from '../shared/lib.js';
 
 const envRequired = [
   'UPSTASH_REDIS_REST_URL',
@@ -30,20 +31,7 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-const [isBugged, bugType, lastModified, lastModifiedBy] = await redis.mget(
-  'globalIsBugged',
-  'globalBugType',
-  'globalLastModified',
-  'globalLastModifiedBy'
-);
-
-const globalShardConfig: GlobalShardConfig = {
-  dailyMap: {},
-  isBugged: isBugged === 'true',
-  bugType: (bugType as 'inaccurate' | 'tgc :/') ?? undefined,
-  lastModified: (lastModified as string) ?? undefined,
-  lastModifiedBy: (lastModifiedBy as string) ?? undefined,
-};
+const globalShardConfig = await getGlobalShardConfig(redis);
 
 try {
   // Fetch the previous config to skip reading previous days' config
@@ -61,16 +49,11 @@ try {
   );
 }
 
-// Today in America/Los_Angeles timezone
-const today = DateTime.now().setZone('America/Los_Angeles') as DateTime<true>;
-const isoToday = today.toISODate();
-
-console.log('Today is', isoToday);
-
-const todayConfig = await redis.hgetall(`daily-${isoToday}`);
-if (todayConfig !== null) {
-  globalShardConfig.dailyMap[isoToday] = todayConfig;
-  console.log('Fetched today config');
+const dailyTupleRes = await getDailyShardConfig(redis);
+if (dailyTupleRes) {
+  const [isoDate, todayConfig] = dailyTupleRes;
+  globalShardConfig.dailyMap[isoDate] = todayConfig;
+  console.log(`Fetched ${isoDate} config`);
 }
 
 console.log('Writing to file');
@@ -102,8 +85,8 @@ try {
       : 'Unknown',
   });
 
-  if (todayConfig !== null) {
-    Object.entries(todayConfig).forEach(([key, value], i) => {
+  if (dailyTupleRes) {
+    Object.entries(dailyTupleRes[1]).forEach(([key, value], i) => {
       fields.push({
         name: `Today's ${key}`,
         value,
