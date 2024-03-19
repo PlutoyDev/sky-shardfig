@@ -22,8 +22,8 @@ interface RequiredEnv {
 }
 // Environment variables are injected at build time, so cannot destructured, cannot access with []
 
-// /discord endpoint
-const discord: PagesFunction<RequiredEnv> = async context => {
+export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
+  // Request Validation (Check if request is from Discord)
   const request = context.request;
   const signature = request.headers.get('X-Signature-Ed25519');
   const timestamp = request.headers.get('X-Signature-Timestamp');
@@ -61,14 +61,4 @@ const discord: PagesFunction<RequiredEnv> = async context => {
       } satisfies APIInteractionResponse,
     });
   }
-};
-
-export const onRequest: PagesFunction<RequiredEnv> = async context => {
-  const request = context.request;
-  const url = new URL(request.url);
-  if (url.pathname === '/discord' && request.method === 'POST') {
-    return discord(context);
-  }
-  console.error('Not Found:', request.url, request.method);
-  return new Response('Not Found', { status: 404 });
 };
