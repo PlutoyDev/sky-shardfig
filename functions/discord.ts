@@ -110,6 +110,12 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
       },
     });
   }
+
+  const redis = new Redis({
+    url: context.env.UPSTASH_REDIS_REST_URL,
+    token: context.env.UPSTASH_REDIS_REST_TOKEN,
+  });
+
   // Always return 200 OK
   return new Response('OK', { status: 200 });
 };
