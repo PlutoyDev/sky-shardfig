@@ -1,10 +1,10 @@
 export const memories = [
-  'jellyfish',
-  'crab',
-  'manta',
-  'krill',
-  'whale',
-  'elder',
+  'Jellyfish',
+  'Crab',
+  'Manta',
+  'Krill',
+  'Whale',
+  'Elder',
 ] as const;
 
 export interface DailyShardConfig {
