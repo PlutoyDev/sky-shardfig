@@ -141,7 +141,7 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
       const optionsMap = new Map(options.map(option => [option.name, option]));
 
       const publishReminder =
-        'Remember to </plublish:1219872570669531247> the changes';
+        'Remember to </publish:1219872570669531247> the changes';
 
       let date = DateTime.now().setZone('America/Los_Angeles');
       const dateInput = optionsMap.get('date') as
@@ -406,7 +406,7 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
         }
       }
 
-      // Plublish
+      // Publish
       if (name === 'publish') {
         discordRest.post(
           Routes.interactionCallback(interaction.id, interaction.token),
@@ -421,49 +421,49 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
         );
         const publishedData =
           ((await publishedDataRes.json()) as GlobalShardConfig)[isoDate] ?? {};
-        const unplublishData = (await getDailyShardConfig(redis))?.[1] ?? {};
+        const unpublishData = (await getDailyShardConfig(redis))?.[1] ?? {};
         const fields: APIEmbedField[] = [];
 
         // Compare published data with current data
-        if (publishedData.memory !== unplublishData.memory) {
+        if (publishedData.memory !== unpublishData.memory) {
           fields.push({
             name: 'Memory',
-            value: `\`${unplublishData.memory}\` -> \`${publishedData.memory}\``,
+            value: `\`${unpublishData.memory}\` -> \`${publishedData.memory}\``,
           });
         }
 
-        if (publishedData.variation !== unplublishData.variation) {
+        if (publishedData.variation !== unpublishData.variation) {
           fields.push({
             name: 'Variation',
-            value: `\`${unplublishData.variation}\` -> \`${publishedData.variation}\``,
+            value: `\`${unpublishData.variation}\` -> \`${publishedData.variation}\``,
           });
         }
 
-        if (publishedData.isBugged !== unplublishData.isBugged) {
+        if (publishedData.isBugged !== unpublishData.isBugged) {
           fields.push({
             name: 'Is Bugged',
-            value: `\`${unplublishData.isBugged}\` -> \`${publishedData.isBugged}\``,
+            value: `\`${unpublishData.isBugged}\` -> \`${publishedData.isBugged}\``,
           });
         }
 
-        if (publishedData.bugType !== unplublishData.bugType) {
+        if (publishedData.bugType !== unpublishData.bugType) {
           fields.push({
             name: 'Bug Type',
-            value: `\`${unplublishData.bugType}\` -> \`${publishedData.bugType}\``,
+            value: `\`${unpublishData.bugType}\` -> \`${publishedData.bugType}\``,
           });
         }
 
-        if (publishedData.isDisabled !== unplublishData.isDisabled) {
+        if (publishedData.isDisabled !== unpublishData.isDisabled) {
           fields.push({
             name: 'Is Disabled',
-            value: `\`${unplublishData.isDisabled}\` -> \`${publishedData.isDisabled}\``,
+            value: `\`${unpublishData.isDisabled}\` -> \`${publishedData.isDisabled}\``,
           });
         }
 
-        if (publishedData.disabledReason !== unplublishData.disabledReason) {
+        if (publishedData.disabledReason !== unpublishData.disabledReason) {
           fields.push({
             name: 'Disabled Reason',
-            value: `\`${unplublishData.disabledReason}\` -> \`${publishedData.disabledReason}\``,
+            value: `\`${unpublishData.disabledReason}\` -> \`${publishedData.disabledReason}\``,
           });
         }
 

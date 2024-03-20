@@ -101,7 +101,7 @@ try {
         )
     );
 
-  const plublishCommand = new SlashCommandBuilder()
+  const publishCommand = new SlashCommandBuilder()
     .setName('publish')
     .setDescription('Publish the config to Sky-Shards');
 
@@ -110,7 +110,7 @@ try {
     setVariationCommand,
     setBuggedStatusCommand,
     setDisabledStatusCommand,
-    plublishCommand,
+    publishCommand,
   ].map(command => command.toJSON());
 
   const guildId = '1219255956207046727';
