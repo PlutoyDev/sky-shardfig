@@ -547,20 +547,26 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
           });
 
           return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'Publishing...' },
+            type: InteractionResponseType.UpdateMessage,
+            data: { content: 'Publishing...', components: [] },
           });
         } catch (e) {
           return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'Failed to publish: Deply hook failed' },
+            type: InteractionResponseType.UpdateMessage,
+            data: {
+              content: 'Failed to publish: Deply hook failed',
+              components: [],
+            },
           });
         }
       } else if (custom_id === 'publish_cancel') {
         await redis.del('publish_confirmation_user');
         return InteractionResponse({
-          type: InteractionResponseType.ChannelMessageWithSource,
-          data: { content: 'Publish request has been cancelled' },
+          type: InteractionResponseType.UpdateMessage,
+          data: {
+            content: 'Publish request has been cancelled',
+            components: [],
+          },
         });
       }
     }
