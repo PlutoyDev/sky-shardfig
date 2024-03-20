@@ -1,9 +1,13 @@
 import { Redis } from '@upstash/redis';
-import { memories, type GlobalShardConfig } from '../shared/types.js';
 import { DateTime } from 'luxon';
 import axios from 'axios';
 import { mkdir, writeFile } from 'fs/promises';
-import { getGlobalShardConfig, getDailyShardConfig } from '../shared/lib.js';
+import {
+  getGlobalShardConfig,
+  getDailyShardConfig,
+  parseDailyShardConfigStringified,
+  GlobalShardConfig,
+} from '../shared/lib.js';
 import { SlashCommandBuilder } from '@discordjs/builders';
 import { REST } from '@discordjs/rest';
 import {
@@ -61,7 +65,8 @@ try {
 const dailyTupleRes = await getDailyShardConfig(redis);
 if (dailyTupleRes) {
   const [isoDate, todayConfig] = dailyTupleRes;
-  globalShardConfig.dailyMap[isoDate] = todayConfig;
+  globalShardConfig.dailyMap[isoDate] =
+    parseDailyShardConfigStringified(todayConfig);
   console.log(`Fetched ${isoDate} config`);
 }
 

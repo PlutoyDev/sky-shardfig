@@ -4,7 +4,7 @@ import {
   RESTPutAPIApplicationGuildCommandsResult,
   Routes,
 } from 'discord-api-types/v10';
-import { memories } from '../shared/types.js';
+import { memories } from '../shared/lib.js';
 
 // Update Discord Command
 try {

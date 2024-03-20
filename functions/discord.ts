@@ -16,8 +16,12 @@ import {
 } from 'discord-api-types/v10';
 import nacl from 'tweetnacl';
 import { DateTime } from 'luxon';
-import { GlobalShardConfig, memories } from '../shared/types.js';
-import { getDailyShardConfig } from '../shared/lib.js';
+import {
+  GlobalShardConfig,
+  memories,
+  parseDailyShardConfigStringified,
+  getDailyShardConfig,
+} from '../shared/lib.js';
 import { REST } from '@discordjs/rest';
 
 interface RequiredEnv {

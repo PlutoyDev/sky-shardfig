@@ -1,6 +1,68 @@
 import type { Redis } from '@upstash/redis';
-import type { DailyShardConfig, GlobalShardConfig } from './types.js';
 import { DateTime } from 'luxon';
+
+export const memories = [
+  'Jellyfish',
+  'Crab',
+  'Manta',
+  'Krill',
+  'Whale',
+  'Elder',
+] as const;
+
+export interface DailyShardConfig {
+  memory?: number;
+  variation?: number;
+  isBugged?: boolean;
+  bugType?: 'noShard' | 'noMemory';
+  isDisabled?: boolean;
+  disabledReason?: string;
+  credits?: string[];
+  lastModified?: string;
+  lastModifiedBy?: string;
+}
+
+export interface DailyShardConfigStringified {
+  memory?: string;
+  variation?: string;
+  isBugged?: string;
+  bugType?: string;
+  isDisabled?: string;
+  disabledReason?: string;
+  credits?: string;
+  lastModified?: string;
+  lastModifiedBy?: string;
+}
+
+export function parseDailyShardConfigStringified(
+  dailyShardConfig: DailyShardConfigStringified
+): DailyShardConfig {
+  return {
+    memory: dailyShardConfig.memory
+      ? parseInt(dailyShardConfig.memory)
+      : undefined,
+    variation: dailyShardConfig.variation
+      ? parseInt(dailyShardConfig.variation)
+      : undefined,
+    isBugged: dailyShardConfig.isBugged === 'true',
+    bugType: dailyShardConfig.bugType as 'noShard' | 'noMemory' | undefined,
+    isDisabled: dailyShardConfig.isDisabled === 'true',
+    disabledReason: dailyShardConfig.disabledReason,
+    credits: dailyShardConfig.credits
+      ? dailyShardConfig.credits.split(',')
+      : undefined,
+    lastModified: dailyShardConfig.lastModified,
+    lastModifiedBy: dailyShardConfig.lastModifiedBy,
+  };
+}
+
+export interface GlobalShardConfig {
+  dailyMap: Record<string, DailyShardConfig>; //key = yyyy-mm-dd
+  isBugged?: boolean;
+  bugType?: 'inaccurate' | 'tgc :/';
+  lastModified?: string;
+  lastModifiedBy?: string;
+}
 
 export async function getGlobalShardConfig(
   redis: Redis
@@ -38,7 +100,7 @@ export async function getGlobalShardConfig(
 export async function getDailyShardConfig(
   redis: Redis,
   date?: DateTime
-): Promise<[string, DailyShardConfig] | undefined> {
+): Promise<[string, DailyShardConfigStringified] | undefined> {
   const isoDate =
     date?.toISODate() ??
     DateTime.now().setZone('America/Los_Angeles').toISODate();
@@ -47,5 +109,5 @@ export async function getDailyShardConfig(
   const config = await redis.hgetall(`daily:${isoDate}`);
 
   if (config === null) return undefined;
-  return [isoDate, config as DailyShardConfig];
+  return [isoDate, config as DailyShardConfigStringified];
 }
