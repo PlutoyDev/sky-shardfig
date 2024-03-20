@@ -14,6 +14,7 @@ const envRequired = [
   'DISCORD_WEBHOOK_URL',
   'DISCORD_CLIENT_SECRET',
   'DISCORD_CLIENT_ID',
+  'DISCORD_BOT_TOKEN',
 ] as const;
 
 const missingEnv = envRequired.filter(env => !process.env[env]);
@@ -135,8 +136,8 @@ try {
 // Update Discord Command
 try {
   // Setup the command in Discord in channel (1219629213238296676)
-  const rest = new REST({ version: '9' }).setToken(
-    process.env.DISCORD_CLIENT_SECRET
+  const rest = new REST({ version: '10' }).setToken(
+    process.env.DISCORD_BOT_TOKEN
   );
 
   const setMemoryCommand = new SlashCommandBuilder()
@@ -204,25 +205,18 @@ try {
         )
     );
 
-  await [setMemoryCommand, setVariationCommand, setBuggedStatusCommand].reduce<
-    Promise<unknown>
-  >(async (accPr, command) => {
-    await accPr;
-    return await rest
-      .post(
-        Routes.applicationGuildCommands(
-          process.env.DISCORD_CLIENT_ID,
-          '1219255956207046727'
-        ),
-        { body: command.toJSON(), auth: true }
-      )
-      .catch(err =>
-        console.error(
-          `Failed to update Discord Command: ${command.name}`,
-          err && typeof err === 'object' && 'message' in err ? err.message : err
-        )
-      );
-  }, Promise.resolve());
+  const commands = [
+    setMemoryCommand.toJSON(),
+    setVariationCommand.toJSON(),
+    setBuggedStatusCommand.toJSON(),
+  ];
+
+  const guildId = '1219255956207046727';
+  await rest.put(
+    Routes.applicationGuildCommands(process.env.DISCORD_CLIENT_ID, guildId),
+    { body: commands }
+  );
+  console.log('Successfully registered application commands.');
 } catch (err) {
   console.error(
     'Failed to update Discord Command',
