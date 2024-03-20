@@ -139,6 +139,8 @@ try {
         } satisfies RESTPatchAPIInteractionOriginalResponseJSONBody,
       }
     )) as RESTPatchAPIInteractionOriginalResponseJSONBody;
+
+    await redis.del('publish_callback');
   }
 } catch (err) {
   console.error(
