@@ -160,11 +160,9 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
           });
         }
         const memoryValue = memory.value;
-        const { memory: prevMem, lastModifiedBy } = await redis.hmget(
-          `daily:${isoDate}`,
-          'memory',
-          'lastModifiedBy'
-        );
+        const { memory: prevMem, lastModifiedBy } =
+          (await redis.hmget(`daily:${isoDate}`, 'memory', 'lastModifiedBy')) ??
+          {};
         const newLastModifiedBy = lastModifiedBy
           ? (lastModifiedBy as string).includes(resovledName)
             ? lastModifiedBy
@@ -201,11 +199,12 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
         }
         const variationValue = variation.value;
 
-        const { variation: prevVar, lastModifiedBy } = await redis.hmget(
-          `daily:${isoDate}`,
-          'variation',
-          'lastModifiedBy'
-        );
+        const { variation: prevVar, lastModifiedBy } =
+          (await redis.hmget(
+            `daily:${isoDate}`,
+            'variation',
+            'lastModifiedBy'
+          )) ?? {};
 
         const newLastModifiedBy = lastModifiedBy
           ? (lastModifiedBy as string).includes(resovledName)
@@ -262,12 +261,12 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
             isBugged: prevIsBugged,
             bugType: prevBugType,
             lastModifiedBy,
-          } = await redis.hmget(
+          } = (await redis.hmget(
             `daily:${isoDate}`,
             'isBugged',
             'bugType',
             'lastModifiedBy'
-          );
+          )) ?? {};
 
           const newLastModifiedBy = lastModifiedBy
             ? (lastModifiedBy as string).includes(resovledName)
