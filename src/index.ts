@@ -6,7 +6,10 @@ import { mkdir, writeFile } from 'fs/promises';
 import { getGlobalShardConfig, getDailyShardConfig } from '../shared/lib.js';
 import { SlashCommandBuilder } from '@discordjs/builders';
 import { REST } from '@discordjs/rest';
-import { Routes } from 'discord-api-types/v10';
+import {
+  RESTPatchAPIInteractionOriginalResponseJSONBody,
+  Routes,
+} from 'discord-api-types/v10';
 
 const envRequired = [
   'UPSTASH_REDIS_REST_URL',
@@ -112,6 +115,37 @@ try {
 } catch (err) {
   console.error(
     'Failed to update Discord Embed',
+    err && typeof err === 'object' && 'message' in err ? err.message : err
+  );
+}
+
+try {
+  // Update interaction if it exists
+  const publishInteraction = await redis.hgetall<
+    Record<'id' | 'token', string>
+  >('publish_callback');
+  if (publishInteraction) {
+    const rest = new REST({ version: '10' }).setToken(
+      process.env.DISCORD_BOT_TOKEN
+    );
+
+    const res = (await rest.patch(
+      Routes.webhookMessage(
+        publishInteraction.id,
+        publishInteraction.token,
+        '@original'
+      ),
+      {
+        body: {
+          content:
+            'Published the config to Sky-Shards\nThank you for your contribution!',
+        } satisfies RESTPatchAPIInteractionOriginalResponseJSONBody,
+      }
+    )) as RESTPatchAPIInteractionOriginalResponseJSONBody;
+  }
+} catch (err) {
+  console.error(
+    'Failed to update Discord Interaction',
     err && typeof err === 'object' && 'message' in err ? err.message : err
   );
 }
