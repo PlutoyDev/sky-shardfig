@@ -421,7 +421,9 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
           'https://sky-shardfig.plutoy.top/minified.json'
         );
         const publishedData =
-          ((await publishedDataRes.json()) as GlobalShardConfig)[isoDate] ?? {};
+          ((await publishedDataRes.json()) as GlobalShardConfig).dailyMap[
+            isoDate
+          ] ?? {};
         const unpublishData = (await getDailyShardConfig(redis))?.[1] ?? {};
         const fields: APIEmbedField[] = [];
 
