@@ -106,26 +106,9 @@ try {
     timestamp: DateTime.now().toISO(),
   };
 
-  let updateSuccess = false;
-  if (messageId !== null) {
-    const res = await axios
-      .patch(`${process.env.DISCORD_WEBHOOK_URL}/messages/${messageId}`, {
-        embeds: [embed],
-      })
-      .catch(() =>
-        axios.delete(`${process.env.DISCORD_WEBHOOK_URL}/messages/${messageId}`)
-      )
-      .catch(() => {});
-    updateSuccess = res?.status === 200;
-  }
-
-  if (!updateSuccess) {
-    const res = await axios.post(
-      `${process.env.DISCORD_WEBHOOK_URL}?wait=true`,
-      { embeds: [embed] }
-    );
-    await redis.set('discordMessageId', res.data.id);
-  }
+  await axios.post(`${process.env.DISCORD_WEBHOOK_URL}`, {
+    embeds: [embed],
+  });
 } catch (err) {
   console.error(
     'Failed to update Discord Embed',
