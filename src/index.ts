@@ -96,10 +96,7 @@ try {
 
   if (dailyTupleRes) {
     Object.entries(dailyTupleRes[1]).forEach(([key, value], i) => {
-      fields.push({
-        name: `Today's ${key}`,
-        value,
-      });
+      fields.push({ name: `Today's ${key}`, value, inline: true });
     });
   }
 
