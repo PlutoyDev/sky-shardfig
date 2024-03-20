@@ -130,6 +130,9 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
       const { name, options } = interaction.data;
       const optionsMap = new Map(options.map(option => [option.name, option]));
 
+      const publishReminder =
+        'Remember to </plublish:1219872570669531247> the changes';
+
       let date = DateTime.now().setZone('America/Los_Angeles');
       const dateInput = optionsMap.get('date') as
         | APIApplicationCommandInteractionDataStringOption
@@ -144,6 +147,22 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
             data: { content: 'Invalid date' },
           });
         }
+
+        // Cannot be 3 day in the past
+        if (
+          dateIn < DateTime.now().minus({ days: 3 }) &&
+          member.user.id !== '702740689846272002'
+        ) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: {
+              content:
+                'Only <@702740689846272002> can set memory for dates older than 3 days',
+              allowed_mentions: { users: ['702740689846272002'] },
+            },
+          });
+        }
+
         date = dateIn;
       }
       const isoDate = date.toISODate();
@@ -183,7 +202,8 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
           data: {
             content:
               `Memory for ${isoDate} has been changed from ` +
-              `${prevMemStr} to \`${memory.value}\``,
+              `${prevMemStr} to \`${memory.value}\`` +
+              publishReminder,
           },
         });
       }
@@ -227,7 +247,8 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
           data: {
             content:
               `Variation for ${isoDate} has been changed from ` +
-              `${prevVar ?? '`unset`'} to \`${variationValue}\``,
+              `${prevVar ?? '`unset`'} to \`${variationValue}\`` +
+              publishReminder,
           },
         });
       }
@@ -290,7 +311,8 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
             data: {
               content:
                 `Shard for ${isoDate} has been set as bugged (${bugType.value})` +
-                (prevIsBugged ? ` from ${prevBugType}` : 'from (unset)'),
+                (prevIsBugged ? ` from ${prevBugType}` : ' from `unset`') +
+                publishReminder,
             },
           });
         } else {
@@ -299,7 +321,76 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
             data: {
-              content: `Shard for ${isoDate} has been set as not bugged`,
+              content:
+                `Shard for ${isoDate} has been set as not bugged` +
+                publishReminder,
+            },
+          });
+        }
+      }
+
+      // Set Daily Is Disabled
+      if (name === 'set_disabled_status') {
+        const isDisabled = optionsMap.get(
+          'is_disabled'
+        ) as APIApplicationCommandInteractionDataBooleanOption;
+        const disabledReason = optionsMap.get(
+          'disabled_reason'
+        ) as APIApplicationCommandInteractionDataStringOption;
+
+        if (!isDisabled) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: { content: 'is_disabled option is required' },
+          });
+        }
+
+        if (isDisabled.value) {
+          if (!disabledReason) {
+            return InteractionResponse({
+              type: InteractionResponseType.ChannelMessageWithSource,
+              data: { content: 'disabled_reason is required' },
+            });
+          }
+
+          const { isDisabled: prevIsDisabled, lastModifiedBy } =
+            (await redis.hmget(
+              `daily:${isoDate}`,
+              'isDisabled',
+              'lastModifiedBy'
+            )) ?? {};
+
+          const newLastModifiedBy = lastModifiedBy
+            ? (lastModifiedBy as string).includes(resovledName)
+              ? lastModifiedBy
+              : `${lastModifiedBy}, ${resovledName}`
+            : resovledName;
+
+          await redis.hset(`daily:${isoDate}`, {
+            isDisabled: true,
+            disabledReason: disabledReason.value,
+            lastModified: DateTime.now(),
+            lastModifiedBy: newLastModifiedBy,
+          });
+
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: {
+              content:
+                `Shard for ${isoDate} has been set as disabled (${disabledReason.value})` +
+                (prevIsDisabled ? ` from ${prevIsDisabled}` : ' from `unset`') +
+                publishReminder,
+            },
+          });
+        } else {
+          await redis.hdel(`daily:${isoDate}`, 'isDisabled', 'disabledReason');
+
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: {
+              content:
+                `Shard for ${isoDate} has been set as not disabled` +
+                publishReminder,
             },
           });
         }

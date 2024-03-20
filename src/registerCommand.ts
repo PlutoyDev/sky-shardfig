@@ -78,6 +78,29 @@ try {
         )
     );
 
+  const setDisabledStatusCommand = new SlashCommandBuilder()
+    .setName('set_disabled_status')
+    .setDescription('Set the daily disabled status')
+    .addBooleanOption(option =>
+      option
+        .setName('is_disabled')
+        .setDescription('Is the shard disabled?')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('reason')
+        .setDescription('The reason for the shard being disabled')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('date')
+        .setDescription(
+          'The date to set the disabled status for in ISO format (YYYY-MM-DD), defaults to today'
+        )
+    );
+
   const plublishCommand = new SlashCommandBuilder()
     .setName('publish')
     .setDescription('Publish the config to Sky-Shards');
@@ -86,6 +109,7 @@ try {
     setMemoryCommand,
     setVariationCommand,
     setBuggedStatusCommand,
+    setDisabledStatusCommand,
     plublishCommand,
   ].map(command => command.toJSON());
 
