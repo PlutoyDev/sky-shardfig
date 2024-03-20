@@ -91,7 +91,6 @@ try {
       option
         .setName('reason')
         .setDescription('The reason for the shard being disabled')
-        .setRequired(true)
     )
     .addStringOption(option =>
       option
