@@ -550,13 +550,14 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
 
           return InteractionResponse({
             type: InteractionResponseType.UpdateMessage,
-            data: { content: 'Publishing...', components: [] },
+            data: { content: 'Publishing...', embeds: [], components: [] },
           });
         } catch (e) {
           return InteractionResponse({
             type: InteractionResponseType.UpdateMessage,
             data: {
               content: 'Failed to publish: Deply hook failed',
+              embeds: [],
               components: [],
             },
           });
@@ -567,6 +568,7 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
           type: InteractionResponseType.UpdateMessage,
           data: {
             content: 'Publish request has been cancelled',
+            embeds: [],
             components: [],
           },
         });
