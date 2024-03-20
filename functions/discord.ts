@@ -159,7 +159,7 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
             data: { content: 'Invalid memory option' },
           });
         }
-        const memoryValue = memory.value;
+        const memoryValue = memories.indexOf(memory.value as any);
         const { memory: prevMem, lastModifiedBy } =
           (await redis.hmget(`daily:${isoDate}`, 'memory', 'lastModifiedBy')) ??
           {};
@@ -174,12 +174,16 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
           lastModified: DateTime.now(),
           lastModifiedBy: newLastModifiedBy,
         });
+
+        let prevMemIndex = prevMem ? parseInt(prevMem as string) : NaN;
+        let prevMemStr = isNaN(prevMemIndex) ? 'unset' : memories[prevMemIndex];
+
         return InteractionResponse({
           type: InteractionResponseType.ChannelMessageWithSource,
           data: {
             content:
               `Memory for ${isoDate} has been changed from ` +
-              `${prevMem ?? '`unset`'} to \`${memoryValue}\``,
+              `${prevMemStr} to \`${memory.value}\``,
           },
         });
       }
