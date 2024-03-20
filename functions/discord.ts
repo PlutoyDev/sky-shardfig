@@ -131,7 +131,7 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
     token: context.env.UPSTASH_REDIS_REST_TOKEN,
   });
 
-  const resovledName = member.nick ?? member.user.username;
+  const resovledName = member.nick ?? member.user.global_name;
 
   // Handle Command
   if (interaction.type === InteractionType.ApplicationCommand) {
