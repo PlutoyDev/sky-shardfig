@@ -14,6 +14,7 @@
   "license": "ISC",
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240314.0",
+    "@discordjs/builders": "^1.7.0",
     "@discordjs/rest": "^2.2.0",
     "@types/luxon": "^3.4.2",
     "@types/node": "^20.11.28",

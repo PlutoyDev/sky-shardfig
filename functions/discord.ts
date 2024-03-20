@@ -1,12 +1,12 @@
 import { Redis } from '@upstash/redis/cloudflare';
 import type {
   APIApplicationCommandInteractionDataBooleanOption,
+  APIApplicationCommandInteractionDataNumberOption,
   APIApplicationCommandInteractionDataStringOption,
   APIInteraction,
   APIInteractionResponse,
 } from 'discord-api-types/v10';
 import {
-  Routes,
   InteractionType,
   InteractionResponseType,
   MessageFlags,
@@ -14,8 +14,7 @@ import {
 } from 'discord-api-types/v10';
 import nacl from 'tweetnacl';
 import { DateTime } from 'luxon';
-import { getGlobalShardConfig, getDailyShardConfig } from '../shared/lib.js';
-import { memories, type GlobalShardConfig } from '../shared/types.js';
+import { memories } from '../shared/types.js';
 
 interface RequiredEnv {
   UPSTASH_REDIS_REST_URL: string;
@@ -191,7 +190,7 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
       if (name === 'set_variation') {
         const variation = optionsMap.get(
           'variation'
-        ) as APIApplicationCommandInteractionDataStringOption;
+        ) as APIApplicationCommandInteractionDataNumberOption;
         if (!variation) {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
