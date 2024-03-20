@@ -213,7 +213,7 @@ try {
   await rest.post(
     Routes.applicationGuildCommands(
       process.env.DISCORD_CLIENT_ID,
-      '1219629213238296676'
+      '1219255956207046727'
     ),
     { body: commands }
   );
