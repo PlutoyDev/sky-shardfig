@@ -214,7 +214,7 @@ try {
           process.env.DISCORD_CLIENT_ID,
           '1219255956207046727'
         ),
-        { body: command.toJSON() }
+        { body: command.toJSON(), auth: true }
       )
       .catch(err =>
         console.error(
