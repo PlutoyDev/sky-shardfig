@@ -34,7 +34,7 @@ export interface DailyShardConfigStringified {
   lastModifiedBy?: string;
 }
 
-export function parseDailyShardConfigStringified(
+export function parseDailyConfig(
   dailyShardConfig: DailyShardConfigStringified
 ): DailyShardConfig {
   return {
@@ -110,4 +110,34 @@ export async function getDailyShardConfig(
 
   if (config === null) return undefined;
   return [isoDate, config as DailyShardConfigStringified];
+}
+
+export async function getParsedDailyShardConfig<
+  Keys extends (keyof DailyShardConfig)[]
+>(
+  redis: Redis,
+  keys: Keys,
+  date?: DateTime
+): Promise<Pick<DailyShardConfig, Keys[number]>> {
+  date ??= DateTime.now().setZone('America/Los_Angeles');
+
+  const isoDate = date.toISODate();
+  if (!isoDate) {
+    return Object.fromEntries(keys.map(key => [key, undefined])) as Pick<
+      DailyShardConfig,
+      Keys[number]
+    >;
+  }
+
+  const config = await redis.hmget(`daily:${isoDate}`, ...keys);
+  if (config === null) {
+    return Object.fromEntries(keys.map(key => [key, undefined])) as Pick<
+      DailyShardConfig,
+      Keys[number]
+    >;
+  }
+  return parseDailyConfig(config as DailyShardConfigStringified) as Pick<
+    DailyShardConfig,
+    Keys[number]
+  >;
 }
