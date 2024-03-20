@@ -3,6 +3,7 @@ import type {
   APIApplicationCommandInteractionDataBooleanOption,
   APIApplicationCommandInteractionDataNumberOption,
   APIApplicationCommandInteractionDataStringOption,
+  APIEmbedField,
   APIInteraction,
   APIInteractionResponse,
 } from 'discord-api-types/v10';
@@ -11,10 +12,13 @@ import {
   InteractionResponseType,
   MessageFlags,
   ApplicationCommandType,
+  Routes,
 } from 'discord-api-types/v10';
 import nacl from 'tweetnacl';
 import { DateTime } from 'luxon';
-import { memories } from '../shared/types.js';
+import { GlobalShardConfig, memories } from '../shared/types.js';
+import { getDailyShardConfig } from '../shared/lib.js';
+import { REST } from '@discordjs/rest';
 
 interface RequiredEnv {
   UPSTASH_REDIS_REST_URL: string;
@@ -23,6 +27,8 @@ interface RequiredEnv {
   DISCORD_CLIENT_ID: string;
   DISCORD_CLIENT_SECRET: string;
   DISCORD_PUBLIC_KEY: string;
+  DISCORD_BOT_TOKEN: string;
+  CLOUDFLARE_DEPLOY_URL: string;
 }
 // Environment variables are injected at build time, so cannot destructured, cannot access with []
 
@@ -115,6 +121,10 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
       },
     });
   }
+
+  const discordRest = new REST({ version: '10' }).setToken(
+    context.env.DISCORD_BOT_TOKEN
+  );
 
   const redis = new Redis({
     url: context.env.UPSTASH_REDIS_REST_URL,
@@ -395,8 +405,160 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
           });
         }
       }
+
+      // Plublish
+      if (name === 'publish') {
+        discordRest.post(
+          Routes.interactionCallback(interaction.id, interaction.token),
+          {
+            body: InteractionResponse({
+              type: InteractionResponseType.DeferredMessageUpdate,
+            }),
+          }
+        );
+        const publishedDataRes = await fetch(
+          'https://sky-shardfig.plutoy.top/minified.json'
+        );
+        const publishedData =
+          ((await publishedDataRes.json()) as GlobalShardConfig)[isoDate] ?? {};
+        const unplublishData = (await getDailyShardConfig(redis))?.[1] ?? {};
+        const fields: APIEmbedField[] = [];
+
+        // Compare published data with current data
+        if (publishedData.memory !== unplublishData.memory) {
+          fields.push({
+            name: 'Memory',
+            value: `\`${unplublishData.memory}\` -> \`${publishedData.memory}\``,
+          });
+        }
+
+        if (publishedData.variation !== unplublishData.variation) {
+          fields.push({
+            name: 'Variation',
+            value: `\`${unplublishData.variation}\` -> \`${publishedData.variation}\``,
+          });
+        }
+
+        if (publishedData.isBugged !== unplublishData.isBugged) {
+          fields.push({
+            name: 'Is Bugged',
+            value: `\`${unplublishData.isBugged}\` -> \`${publishedData.isBugged}\``,
+          });
+        }
+
+        if (publishedData.bugType !== unplublishData.bugType) {
+          fields.push({
+            name: 'Bug Type',
+            value: `\`${unplublishData.bugType}\` -> \`${publishedData.bugType}\``,
+          });
+        }
+
+        if (publishedData.isDisabled !== unplublishData.isDisabled) {
+          fields.push({
+            name: 'Is Disabled',
+            value: `\`${unplublishData.isDisabled}\` -> \`${publishedData.isDisabled}\``,
+          });
+        }
+
+        if (publishedData.disabledReason !== unplublishData.disabledReason) {
+          fields.push({
+            name: 'Disabled Reason',
+            value: `\`${unplublishData.disabledReason}\` -> \`${publishedData.disabledReason}\``,
+          });
+        }
+
+        if (fields.length === 0) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: {
+              content: 'No changes to publish',
+            },
+          });
+        }
+
+        const prevConfirmingUser = await redis.set(
+          'publish_confirmation_user',
+          member.user.id,
+          { get: true }
+        );
+
+        return InteractionResponse({
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: {
+            embeds: [
+              {
+                title: `Confirm Publish for ${isoDate}`,
+                description:
+                  `Please confirm the following changes for ${isoDate}` +
+                  (prevConfirmingUser
+                    ? `\nRequest by <@${prevConfirmingUser}> has been replaced`
+                    : ''),
+                fields,
+              },
+            ],
+            components: [
+              {
+                type: 1,
+                components: [
+                  {
+                    type: 2,
+                    style: 1,
+                    label: 'Confirm',
+                    custom_id: 'publish_confirm',
+                  },
+                  {
+                    type: 2,
+                    style: 4,
+                    label: 'Cancel',
+                    custom_id: 'publish_cancel',
+                  },
+                ],
+              },
+            ],
+          },
+        });
+      }
+    }
+  } else if (interaction.type === InteractionType.MessageComponent) {
+    const { custom_id } = interaction.data;
+    if (custom_id.startsWith('publish_')) {
+      if (custom_id === 'publish_confirm') {
+        const confirmingUser = await redis.get('publish_confirmation_user');
+        if (confirmingUser !== member.user.id) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: {
+              content:
+                'This publish request has to be confirmed by the original requester',
+            },
+          });
+        }
+
+        await redis.del('publish_confirmation_user');
+        await redis.hmset('publish_callback', {
+          id: interaction.id,
+          token: interaction.token,
+        });
+
+        try {
+          await fetch(context.env.CLOUDFLARE_DEPLOY_URL, {
+            method: 'POST',
+          });
+
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: { content: 'Publishing...' },
+          });
+        } catch (e) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: { content: 'Failed to publish: Deply hook failed' },
+          });
+        }
+      }
     }
   }
+
   // Always return 200 OK
   return new Response('OK', { status: 200 });
 };
