@@ -5,7 +5,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import {
   getGlobalShardConfig,
   getDailyShardConfig,
-  parseDailyShardConfigStringified,
+  parseDailyConfig,
   GlobalShardConfig,
 } from '../shared/lib.js';
 import { REST } from '@discordjs/rest';
@@ -65,8 +65,7 @@ if (process.env.NO_FETCH_PREV_CONFIG !== 'true') {
 const dailyTupleRes = await getDailyShardConfig(redis);
 if (dailyTupleRes) {
   const [isoDate, todayConfig] = dailyTupleRes;
-  globalShardConfig.dailyMap[isoDate] =
-    parseDailyShardConfigStringified(todayConfig);
+  globalShardConfig.dailyMap[isoDate] = parseDailyConfig(todayConfig);
   console.log(`Fetched ${isoDate} config`);
 }
 
@@ -125,7 +124,7 @@ try {
   const publishInteraction = await redis.hgetall<
     Record<'id' | 'token', string>
   >('publish_callback');
-  if (publishInteraction) {
+  if (publishInteraction && publishInteraction.id && publishInteraction.token) {
     const rest = new REST({ version: '10' }).setToken(
       process.env.DISCORD_BOT_TOKEN
     );

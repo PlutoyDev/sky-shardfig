@@ -19,8 +19,9 @@ import { DateTime } from 'luxon';
 import {
   GlobalShardConfig,
   memories,
-  parseDailyShardConfigStringified,
+  parseDailyConfig,
   getDailyShardConfig,
+  getParsedDailyShardConfig,
 } from '../shared/lib.js';
 import { REST } from '@discordjs/rest';
 
@@ -193,23 +194,24 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
           });
         }
         const memoryValue = memories.indexOf(memory.value as any);
-        const { memory: prevMem, lastModifiedBy } =
-          (await redis.hmget(`daily:${isoDate}`, 'memory', 'lastModifiedBy')) ??
-          {};
-        const newLastModifiedBy = lastModifiedBy
-          ? (lastModifiedBy as string).includes(resovledName)
-            ? lastModifiedBy
-            : `${lastModifiedBy}, ${resovledName}`
-          : resovledName;
+        const { memory: prevMem, credits } = await getParsedDailyShardConfig(
+          redis,
+          ['memory', 'credits'],
+          date
+        );
+
+        if (!credits.includes(resovledName)) {
+          credits.push(resovledName);
+        }
 
         await redis.hset(`daily:${isoDate}`, {
           memory: memoryValue,
+          credits: credits.join(','),
           lastModified: DateTime.now(),
-          lastModifiedBy: newLastModifiedBy,
+          lastModifiedBy: member.user.id,
         });
 
-        let prevMemIndex = prevMem ? parseInt(prevMem as string) : NaN;
-        let prevMemStr = isNaN(prevMemIndex) ? 'unset' : memories[prevMemIndex];
+        let prevMemStr = isNaN(prevMem) ? 'unset' : memories[prevMem];
 
         return InteractionResponse({
           type: InteractionResponseType.ChannelMessageWithSource,
@@ -237,23 +239,21 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
         }
         const variationValue = variation.value;
 
-        const { variation: prevVar, lastModifiedBy } =
-          (await redis.hmget(
-            `daily:${isoDate}`,
-            'variation',
-            'lastModifiedBy'
-          )) ?? {};
+        const { variation: prevVar, credits } = await getParsedDailyShardConfig(
+          redis,
+          ['variation', 'credits'],
+          date
+        );
 
-        const newLastModifiedBy = lastModifiedBy
-          ? (lastModifiedBy as string).includes(resovledName)
-            ? lastModifiedBy
-            : `${lastModifiedBy}, ${resovledName}`
-          : resovledName;
+        if (!credits.includes(resovledName)) {
+          credits.push(resovledName);
+        }
 
         await redis.hset(`daily:${isoDate}`, {
           variation: variationValue,
           lastModified: DateTime.now(),
-          lastModifiedBy: newLastModifiedBy,
+          lastModifiedBy: member.user.id,
+          credits: credits.join(','),
         });
 
         return InteractionResponse({
@@ -300,25 +300,23 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
           const {
             isBugged: prevIsBugged,
             bugType: prevBugType,
-            lastModifiedBy,
-          } = (await redis.hmget(
-            `daily:${isoDate}`,
-            'isBugged',
-            'bugType',
-            'lastModifiedBy'
-          )) ?? {};
+            credits,
+          } = await getParsedDailyShardConfig(
+            redis,
+            ['isBugged', 'bugType', 'credits'],
+            date
+          );
 
-          const newLastModifiedBy = lastModifiedBy
-            ? (lastModifiedBy as string).includes(resovledName)
-              ? lastModifiedBy
-              : `${lastModifiedBy}, ${resovledName}`
-            : resovledName;
+          if (!credits.includes(resovledName)) {
+            credits.push(resovledName);
+          }
 
           await redis.hset(`daily:${isoDate}`, {
             isBugged: true,
             bugType: bugType.value,
             lastModified: DateTime.now(),
-            lastModifiedBy: newLastModifiedBy,
+            lastModifiedBy: member.user.id,
+            credits: credits.join(','),
           });
 
           return InteractionResponse({
@@ -368,24 +366,23 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
             });
           }
 
-          const { isDisabled: prevIsDisabled, lastModifiedBy } =
-            (await redis.hmget(
-              `daily:${isoDate}`,
-              'isDisabled',
-              'lastModifiedBy'
-            )) ?? {};
+          const { isDisabled: prevIsDisabled, credits } =
+            await getParsedDailyShardConfig(
+              redis,
+              ['isDisabled', 'credits'],
+              date
+            );
 
-          const newLastModifiedBy = lastModifiedBy
-            ? (lastModifiedBy as string).includes(resovledName)
-              ? lastModifiedBy
-              : `${lastModifiedBy}, ${resovledName}`
-            : resovledName;
+          if (!credits.includes(resovledName)) {
+            credits.push(resovledName);
+          }
 
           await redis.hset(`daily:${isoDate}`, {
             isDisabled: true,
             disabledReason: disabledReason.value,
             lastModified: DateTime.now(),
-            lastModifiedBy: newLastModifiedBy,
+            lastModifiedBy: member.user.id,
+            credits: credits.join(','),
           });
 
           return InteractionResponse({
@@ -430,9 +427,7 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
           ] ?? {};
         const unpublishDataStringified =
           (await getDailyShardConfig(redis))?.[1] ?? {};
-        const unpublishData = parseDailyShardConfigStringified(
-          unpublishDataStringified
-        );
+        const unpublishData = parseDailyConfig(unpublishDataStringified);
         const fields: APIEmbedField[] = [];
 
         // Compare published data with current data
