@@ -126,9 +126,9 @@ try {
       process.env.DISCORD_BOT_TOKEN
     );
 
-    const res = (await rest.patch(
+    (await rest.patch(
       Routes.webhookMessage(
-        publishInteraction.id,
+        process.env.DISCORD_CLIENT_ID,
         publishInteraction.token,
         '@original'
       ),
