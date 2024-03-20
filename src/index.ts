@@ -204,19 +204,25 @@ try {
         )
     );
 
-  const commands = [
-    setMemoryCommand,
-    setVariationCommand,
-    setBuggedStatusCommand,
-  ].map(command => command.toJSON());
-
-  await rest.post(
-    Routes.applicationGuildCommands(
-      process.env.DISCORD_CLIENT_ID,
-      '1219255956207046727'
-    ),
-    { body: commands }
-  );
+  await [setMemoryCommand, setVariationCommand, setBuggedStatusCommand].reduce<
+    Promise<unknown>
+  >(async (accPr, command) => {
+    await accPr;
+    return await rest
+      .post(
+        Routes.applicationGuildCommands(
+          process.env.DISCORD_CLIENT_ID,
+          '1219255956207046727'
+        ),
+        { body: command.toJSON() }
+      )
+      .catch(err =>
+        console.error(
+          `Failed to update Discord Command: ${command.name}`,
+          err && typeof err === 'object' && 'message' in err ? err.message : err
+        )
+      );
+  }, Promise.resolve());
 } catch (err) {
   console.error(
     'Failed to update Discord Command',
