@@ -8,7 +8,6 @@ import {
   parseDailyShardConfigStringified,
   GlobalShardConfig,
 } from '../shared/lib.js';
-import { SlashCommandBuilder } from '@discordjs/builders';
 import { REST } from '@discordjs/rest';
 import {
   RESTPatchAPIInteractionOriginalResponseJSONBody,
@@ -35,7 +34,7 @@ type RequiredEnv = Record<(typeof envRequired)[number], string>;
 
 declare global {
   namespace NodeJS {
-    interface ProcessEnv extends RequiredEnv {}
+    interface ProcessEnv extends RequiredEnv, Record<string, string> {}
   }
 }
 
@@ -46,20 +45,21 @@ const redis = new Redis({
 
 const globalShardConfig = await getGlobalShardConfig(redis);
 
-try {
-  // Fetch the previous config to skip reading previous days' config
-
-  const prevConfigRes = await axios.get<GlobalShardConfig>(
-    'https://sky-shardfig.plutoy.top/minified.json'
-  );
-  const prevConfig = prevConfigRes.data;
-  console.log('Fetched previous config', Object.keys(prevConfig.dailyMap));
-  Object.assign(globalShardConfig.dailyMap, prevConfig.dailyMap);
-} catch (err) {
-  console.error(
-    'Failed to fetch previous config:',
-    err && typeof err === 'object' && 'message' in err ? err.message : err
-  );
+if (process.env.NO_FETCH_PREV_CONFIG !== 'true') {
+  try {
+    // Fetch the previous config to skip reading previous days' config
+    const prevConfigRes = await axios.get<GlobalShardConfig>(
+      'https://sky-shardfig.plutoy.top/minified.json'
+    );
+    const prevConfig = prevConfigRes.data;
+    console.log('Fetched previous config', Object.keys(prevConfig.dailyMap));
+    Object.assign(globalShardConfig.dailyMap, prevConfig.dailyMap);
+  } catch (err) {
+    console.error(
+      'Failed to fetch previous config:',
+      err && typeof err === 'object' && 'message' in err ? err.message : err
+    );
+  }
 }
 
 const dailyTupleRes = await getDailyShardConfig(redis);
@@ -80,7 +80,6 @@ await Promise.all([
 
 try {
   // Update Discord Embed
-  const messageId = await redis.get('discordMessageId');
   const fields = [];
   if (globalShardConfig.isBugged) {
     fields.push({
