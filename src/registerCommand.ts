@@ -1,6 +1,9 @@
 import { SlashCommandBuilder } from '@discordjs/builders';
 import { REST } from '@discordjs/rest';
-import { Routes } from 'discord-api-types/v10';
+import {
+  RESTPutAPIApplicationGuildCommandsResult,
+  Routes,
+} from 'discord-api-types/v10';
 import { memories } from '../shared/types.js';
 
 // Update Discord Command
@@ -75,18 +78,25 @@ try {
         )
     );
 
+  const plublishCommand = new SlashCommandBuilder()
+    .setName('publish')
+    .setDescription('Publish the config to Sky-Shards');
+
   const commands = [
-    setMemoryCommand.toJSON(),
-    setVariationCommand.toJSON(),
-    setBuggedStatusCommand.toJSON(),
-  ];
+    setMemoryCommand,
+    setVariationCommand,
+    setBuggedStatusCommand,
+    plublishCommand,
+  ].map(command => command.toJSON());
 
   const guildId = '1219255956207046727';
-  await rest.put(
+  const res = (await rest.put(
     Routes.applicationGuildCommands(process.env.DISCORD_CLIENT_ID, guildId),
     { body: commands }
-  );
+  )) as RESTPutAPIApplicationGuildCommandsResult;
+
   console.log('Successfully registered application commands.');
+  console.table(res.map(command => ({ name: command.name, id: command.id })));
 } catch (err) {
   console.error(
     'Failed to update Discord Command',
