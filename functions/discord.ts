@@ -277,14 +277,15 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
             type: InteractionResponseType.ChannelMessageWithSource,
             data: { content: 'is_bugged option is required' },
           });
-        } else if (!bugType) {
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'bug_type option is required' },
-          });
         }
 
         if (isBugged.value) {
+          if (!bugType) {
+            return InteractionResponse({
+              type: InteractionResponseType.ChannelMessageWithSource,
+              data: { content: 'bug_type option is required' },
+            });
+          }
           if (!['noShard', 'noMemory'].includes(bugType.value)) {
             return InteractionResponse({
               type: InteractionResponseType.ChannelMessageWithSource,
