@@ -1,0 +1,7 @@
+/minified.json
+  Access-Control-Allow-Origin: *
+  Access-Control-Allow-Methods: GET
+
+/prettified.json
+  Access-Control-Allow-Origin: *
+  Access-Control-Allow-Methods: GET
