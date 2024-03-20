@@ -428,49 +428,55 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
           ((await publishedDataRes.json()) as GlobalShardConfig).dailyMap[
             isoDate
           ] ?? {};
-        const unpublishData = (await getDailyShardConfig(redis))?.[1] ?? {};
+        const unpublishDataStringified =
+          (await getDailyShardConfig(redis))?.[1] ?? {};
+        const unpublishData = parseDailyShardConfigStringified(
+          unpublishDataStringified
+        );
         const fields: APIEmbedField[] = [];
 
         // Compare published data with current data
         if (publishedData.memory !== unpublishData.memory) {
+          const prev = memories[publishedData.memory];
+          const next = memories[unpublishData.memory];
           fields.push({
             name: 'Memory',
-            value: `\`${unpublishData.memory}\` -> \`${publishedData.memory}\``,
+            value: `\`${prev}\` -> \`${next}\``,
           });
         }
 
         if (publishedData.variation !== unpublishData.variation) {
           fields.push({
             name: 'Variation',
-            value: `\`${unpublishData.variation}\` -> \`${publishedData.variation}\``,
+            value: `\`${publishedData.variation}\` -> \`${unpublishData.variation}\``,
           });
         }
 
         if (publishedData.isBugged !== unpublishData.isBugged) {
           fields.push({
             name: 'Is Bugged',
-            value: `\`${unpublishData.isBugged}\` -> \`${publishedData.isBugged}\``,
+            value: `\`${publishedData.isBugged}\` -> \`${unpublishData.isBugged}\``,
           });
         }
 
         if (publishedData.bugType !== unpublishData.bugType) {
           fields.push({
             name: 'Bug Type',
-            value: `\`${unpublishData.bugType}\` -> \`${publishedData.bugType}\``,
+            value: `\`${publishedData.bugType}\` -> \`${unpublishData.bugType}\``,
           });
         }
 
         if (publishedData.isDisabled !== unpublishData.isDisabled) {
           fields.push({
             name: 'Is Disabled',
-            value: `\`${unpublishData.isDisabled}\` -> \`${publishedData.isDisabled}\``,
+            value: `\`${publishedData.isDisabled}\` -> \`${unpublishData.isDisabled}\``,
           });
         }
 
         if (publishedData.disabledReason !== unpublishData.disabledReason) {
           fields.push({
             name: 'Disabled Reason',
-            value: `\`${unpublishData.disabledReason}\` -> \`${publishedData.disabledReason}\``,
+            value: `\`${publishedData.disabledReason}\` -> \`${unpublishData.disabledReason}\``,
           });
         }
 
