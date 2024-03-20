@@ -138,7 +138,7 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
     if (interaction.data.type === ApplicationCommandType.ChatInput) {
       // Slash Command
       const { name, options } = interaction.data;
-      const optionsMap = new Map(options.map(option => [option.name, option]));
+      const optionsMap = new Map(options?.map(option => [option.name, option]));
 
       const publishReminder =
         'Remember to </publish:1219872570669531247> the changes';
