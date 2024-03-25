@@ -69,6 +69,31 @@ if (dailyTupleRes) {
   console.log(`Fetched ${isoDate} config`);
 }
 
+try {
+  const editedDates = await redis.smembers('edited_dates');
+  if (editedDates.length) {
+    console.log('Fetched edited dates:', editedDates);
+    await redis.del('edited_dates');
+    await Promise.all(
+      editedDates.map(async dateStr => {
+        const date = DateTime.fromISO(dateStr);
+        if (date.hasSame(DateTime.now(), 'day')) return; // Skip today's config
+        const configTuple = await getDailyShardConfig(redis, date);
+        if (configTuple) {
+          const [isoDate, config] = configTuple;
+          globalShardConfig.dailyMap[isoDate] = parseDailyConfig(config);
+          console.log(`Fetched ${isoDate} config`);
+        }
+      })
+    );
+  }
+} catch (err) {
+  console.error(
+    'Non-fatal Error: Unable to fetch for other dates',
+    err && typeof err === 'object' && 'message' in err ? err.message : err
+  );
+}
+
 console.log('Writing to file');
 
 await mkdir('dist').catch(() => {});

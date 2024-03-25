@@ -177,10 +177,10 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
             },
           });
         }
-
         date = dateIn;
       }
       const isoDate = date.toISODate();
+      redis.sadd('edited_dates', isoDate);
 
       // Set Daily Memory
       if (name === 'set_memory') {
