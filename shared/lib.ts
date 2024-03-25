@@ -50,7 +50,7 @@ export function parseDailyConfig(
     disabledReason: dailyShardConfig.disabledReason,
     credits: dailyShardConfig.credits
       ? dailyShardConfig.credits.split(',')
-      : undefined,
+      : [],
     lastModified: dailyShardConfig.lastModified,
     lastModifiedBy: dailyShardConfig.lastModifiedBy,
   };
