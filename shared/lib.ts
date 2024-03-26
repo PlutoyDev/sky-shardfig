@@ -203,7 +203,10 @@ export async function getGlobalShardConfig(redis: Redis) {
     parsedConfig.bugged = true;
     parsedConfig.buggedReason = config.buggedReason;
     parsedConfig.buggedReasonKey = config.buggedReasonKey;
+  } else {
+    parsedConfig.bugged = false;
   }
+  return parsedConfig;
 }
 
 export async function setGlobalShardConfig(redis: Redis, data: GlobalConfig) {
