@@ -10,6 +10,43 @@ export const memories = [
   'Elder',
 ] as const;
 
+// Used to validate variation input, not listed = 1
+export const numMapVarients = {
+  'prairie.butterfly': 3,
+  'prairie.village': 3,
+  'prairie.bird': 2,
+  'prairie.island': 3,
+  'forest.brook': 2,
+  'forest.end': 2,
+  'valley.rink': 3,
+  'valley.dreams': 2,
+  'wateland.temple': 3,
+  'wasteland.battlefield': 3,
+  'wasteland.graveyard': 2,
+  'wasteland.crab': 2,
+  'wasteland.ark': 4,
+  'vault.starlight': 3,
+  'vault.jelly': 2,
+};
+
+export function getShardMapInfo(date: DateTime) {
+  const dayOfMth = date.day;
+  const isRed = dayOfMth % 2 === 0;
+  const realmIndex = dayOfMth % 5;
+  const mapSetIndex = isRed
+    ? (((dayOfMth - 1) / 2) % 3) + 2
+    : (dayOfMth / 2) % 2;
+  // prettier-ignore
+  const map = ([
+    ['prairie.butterfly', 'forest.brook', 'valley.rink', 'wasteland.temple', 'vault.starlight'],
+    ['prairie.village', 'forest.boneyard', 'valley.rink', 'wasteland.battlefield', 'vault.starlight'],
+    ['prairie.cave', 'forest.end', 'valley.dreams', 'wasteland.graveyard', 'vault.jelly'],
+    ['prairie.bird', 'forest.tree', 'valley.dreams', 'wasteland.crab', 'vault.jelly'],
+    ['prairie.island', 'forest.sunny', 'valley.hermit', 'wasteland.ark', 'vault.jelly'],
+  ])[mapSetIndex][realmIndex];
+  const numVariants = numMapVarients[map as keyof typeof numMapVarients] ?? 1;
+  return { map, numVariants };
+}
 export interface DailyShardConfig {
   memory?: number;
   variation?: number;
