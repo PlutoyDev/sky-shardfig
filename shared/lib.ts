@@ -207,17 +207,18 @@ export async function getGlobalShardConfig(redis: Redis) {
 }
 
 export async function setGlobalShardConfig(redis: Redis, data: GlobalConfig) {
-  const configStringified: Record<string, string> = {};
+  const configStringified: Record<string, string | null> = {};
   if (data.bugged) {
     configStringified.bugged = 'true';
-    configStringified.buggedReason = data.buggedReason ?? '';
-    configStringified.buggedReasonKey = data.buggedReasonKey ?? '';
+    configStringified.buggedReason = data.buggedReason ?? null;
+    configStringified.buggedReasonKey = data.buggedReasonKey ?? null;
   } else {
     configStringified.bugged = 'false';
-    await redis.hdel('global', 'buggedReason', 'buggedReasonKey');
+    configStringified.buggedReason = null;
+    configStringified.buggedReasonKey = null;
   }
 
-  await redis.hmset('global', configStringified);
+  await redis.hset('global', configStringified);
 }
 
 export async function pushAuthorName(
