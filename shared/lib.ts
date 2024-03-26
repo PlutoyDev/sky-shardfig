@@ -186,7 +186,7 @@ export async function setDailyConfig(
   await redis.hincrby(`daily:${isoDate}`, 'version', 1);
 }
 
-export interface GlobalShardConfig {
+export interface GlobalConfig {
   // This controls the global state of the application
   bugged?: boolean;
   buggedReason?: string;
@@ -194,11 +194,11 @@ export interface GlobalShardConfig {
 }
 
 export async function getGlobalShardConfig(redis: Redis) {
-  const config = await redis.hgetall<Record<keyof GlobalShardConfig, string>>(
+  const config = await redis.hgetall<Record<keyof GlobalConfig, string>>(
     'global'
   );
   if (!config) return {};
-  const parsedConfig: GlobalShardConfig = {};
+  const parsedConfig: GlobalConfig = {};
   if (config.bugged && config.bugged === 'true') {
     parsedConfig.bugged = true;
     parsedConfig.buggedReason = config.buggedReason;
@@ -206,10 +206,7 @@ export async function getGlobalShardConfig(redis: Redis) {
   }
 }
 
-export async function setGlobalShardConfig(
-  redis: Redis,
-  data: GlobalShardConfig
-) {
+export async function setGlobalShardConfig(redis: Redis, data: GlobalConfig) {
   const configStringified: Record<string, string> = {};
   if (data.bugged) {
     configStringified.bugged = 'true';
@@ -238,7 +235,7 @@ export async function getAuthorNames(redis: Redis) {
 }
 
 export interface RemoteConfigResponse {
-  dailyMap: Record<string, DailyConfig>;
-  authorName: Record<string, string>;
-  global: GlobalShardConfig;
+  dailiesMap: Record<string, DailyConfig>;
+  authorNames: Record<string, string>;
+  global: GlobalConfig;
 }
