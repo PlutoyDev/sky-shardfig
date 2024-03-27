@@ -17,10 +17,9 @@ import {
 import nacl from 'tweetnacl';
 import { DateTime } from 'luxon';
 import {
-  GlobalShardConfig,
   memories,
   parseDailyConfig,
-  getDailyShardConfig,
+  getDailyConfig,
   getParsedDailyShardConfig,
 } from '../shared/lib.js';
 import { REST } from '@discordjs/rest';
@@ -426,7 +425,7 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
             isoDate
           ] ?? {};
         const unpublishDataStringified =
-          (await getDailyShardConfig(redis))?.[1] ?? {};
+          (await getDailyConfig(redis))?.[1] ?? {};
         const unpublishData = parseDailyConfig(unpublishDataStringified);
         const fields: APIEmbedField[] = [];
 
