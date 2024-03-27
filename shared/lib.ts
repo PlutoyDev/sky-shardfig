@@ -197,7 +197,7 @@ export async function getGlobalShardConfig(redis: Redis) {
   const config = await redis.hgetall<Record<keyof GlobalConfig, string>>(
     'global'
   );
-  if (!config) return {};
+  if (!config) return { bugged: false };
   const parsedConfig: GlobalConfig = {};
   if (config.bugged && config.bugged === 'true') {
     parsedConfig.bugged = true;

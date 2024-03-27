@@ -3,14 +3,17 @@ import { DateTime } from 'luxon';
 import axios from 'axios';
 import { mkdir, writeFile } from 'fs/promises';
 import {
+  RemoteConfigResponse,
+  getParsedDailyConfig,
+  DailyConfig,
   getGlobalShardConfig,
-  getDailyShardConfig,
-  parseDailyConfig,
-  GlobalShardConfig,
+  getAuthorNames,
 } from '../shared/lib.js';
 import { REST } from '@discordjs/rest';
 import {
+  MessageFlags,
   RESTPatchAPIInteractionOriginalResponseJSONBody,
+  RESTPostAPIWebhookWithTokenJSONBody,
   Routes,
 } from 'discord-api-types/v10';
 
@@ -43,136 +46,145 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-const globalShardConfig = await getGlobalShardConfig(redis);
+const logs: string[] = [];
+const log = (msg: string) => {
+  logs.push(`[${DateTime.now().toISO()}] ${msg}`);
+  console.log(msg);
+};
+const errorLog = (msg: string, err: unknown) => {
+  logs.push(`\n\n[${DateTime.now().toISO()}] ${msg}\n${stringifyError(err)}`);
+  console.error(msg, err);
+};
+const stringifyError = (err: unknown) =>
+  err && typeof err === 'object' && 'message' in err
+    ? err.message
+    : JSON.stringify(err);
 
-if (process.env.NO_FETCH_PREV_CONFIG !== 'true') {
-  try {
-    // Fetch the previous config to skip reading previous days' config
-    const prevConfigRes = await axios.get<GlobalShardConfig>(
-      'https://sky-shardfig.plutoy.top/minified.json'
-    );
-    const prevConfig = prevConfigRes.data;
-    console.log('Fetched previous config', Object.keys(prevConfig.dailyMap));
-    Object.assign(globalShardConfig.dailyMap, prevConfig.dailyMap);
-  } catch (err) {
-    console.error(
-      'Failed to fetch previous config:',
-      err && typeof err === 'object' && 'message' in err ? err.message : err
-    );
-  }
-}
-
-const dailyTupleRes = await getDailyShardConfig(redis);
-if (dailyTupleRes) {
-  const [isoDate, todayConfig] = dailyTupleRes;
-  globalShardConfig.dailyMap[isoDate] = parseDailyConfig(todayConfig);
-  console.log(`Fetched ${isoDate} config`);
-}
+log('Starting publish script');
 
 try {
+  const dailiesMap: Record<string, DailyConfig> = {};
+
+  // Fetch config for dates that have been edited
   const editedDates = await redis.smembers('edited_dates');
   if (editedDates.length) {
-    console.log('Fetched edited dates:', editedDates);
-    await redis.del('edited_dates');
-    await Promise.all(
-      editedDates.map(async dateStr => {
+    log(`Fetched edited dates: ${editedDates.join(', ')}`);
+    await Promise.all([
+      redis.del('edited_dates'),
+      ...editedDates.map(async dateStr => {
         const date = DateTime.fromISO(dateStr);
-        if (date.hasSame(DateTime.now(), 'day')) return; // Skip today's config
-        const configTuple = await getDailyShardConfig(redis, date);
-        if (configTuple) {
-          const [isoDate, config] = configTuple;
-          globalShardConfig.dailyMap[isoDate] = parseDailyConfig(config);
-          console.log(`Fetched ${isoDate} config`);
+        const config = await getParsedDailyConfig(redis, date);
+        if (config) {
+          dailiesMap[dateStr] = config;
+          log(`\tFetched ${dateStr} config`);
+        } else {
+          log(`\tFailed to fetch ${dateStr} config: empty or invalid`);
         }
-      })
+      }),
+    ]).catch(err => {
+      console.error('Failed to fetch edited dates', stringifyError(err));
+      log('Failed to fetch edited dates');
+      log('Error: ' + stringifyError(err));
+      throw err;
+    });
+  }
+
+  // Fetch previous daily config
+  log('Fetching previous daily config');
+  await axios
+    .get<RemoteConfigResponse>(
+      'https://sky-shardfig.plutoy.top/minified.json',
+      { validateStatus: status => status === 200 }
+    )
+    .then(async res => {
+      const prevRemoteConfig = res.data;
+      log(
+        'Fetched previous daily config: ' +
+          Object.keys(prevRemoteConfig.dailiesMap)
+      );
+      Object.assign(dailiesMap, prevRemoteConfig.dailiesMap);
+    })
+    .catch(err => {
+      console.error(
+        'Failed to fetch previous daily config',
+        stringifyError(err)
+      );
+      log('Failed to fetch previous daily config');
+      log('Error: ' + stringifyError(err));
+    });
+
+  log('Fetching global config and author names');
+  const [global, authorNames] = await Promise.all([
+    getGlobalShardConfig(redis),
+    getAuthorNames(redis),
+  ]).catch(err => {
+    console.error(
+      'Failed to fetch global config and/or author names',
+      stringifyError(err)
     );
-  }
-} catch (err) {
-  console.error(
-    'Non-fatal Error: Unable to fetch for other dates',
-    err && typeof err === 'object' && 'message' in err ? err.message : err
-  );
-}
-
-console.log('Writing to file');
-
-await mkdir('dist').catch(() => {});
-await Promise.all([
-  writeFile('dist/prettified.json', JSON.stringify(globalShardConfig, null, 2)),
-  writeFile('dist/minified.json', JSON.stringify(globalShardConfig)),
-]);
-
-try {
-  // Update Discord Embed
-  const fields = [];
-  if (globalShardConfig.isBugged) {
-    fields.push({
-      name: 'Is Bugged',
-      value: 'Yes',
-    });
-    fields.push({
-      name: 'Bug Type',
-      value: globalShardConfig.bugType,
-    });
-  }
-  fields.push({
-    name: 'Last Modified',
-    value: globalShardConfig.lastModified
-      ? `${globalShardConfig.lastModified} by ${globalShardConfig.lastModifiedBy}`
-      : 'Unknown',
+    log('Failed to fetch global config and/or author names');
+    log('Error: ' + stringifyError(err));
+    throw err;
   });
 
-  if (dailyTupleRes) {
-    Object.entries(dailyTupleRes[1]).forEach(([key, value], i) => {
-      fields.push({ name: `Today's ${key}`, value, inline: true });
-    });
-  }
+  const remoteConfigOut = {
+    global,
+    authorNames,
+    dailiesMap,
+  } satisfies RemoteConfigResponse;
 
-  const embed = {
-    title: `Shard Config`,
-    fields,
-    timestamp: DateTime.now().toISO(),
-  };
+  log('Writing to file');
+  await mkdir('dist').catch(() => {});
+  await Promise.all([
+    writeFile('dist/prettified.json', JSON.stringify(remoteConfigOut, null, 2)),
+    writeFile('dist/minified.json', JSON.stringify(remoteConfigOut)),
+    writeFile('dist/last_updated.txt', Date.now().toString()),
+  ]);
 
-  await axios.post(`${process.env.DISCORD_WEBHOOK_URL}`, {
-    embeds: [embed],
-  });
-} catch (err) {
-  console.error(
-    'Failed to update Discord Embed',
-    err && typeof err === 'object' && 'message' in err ? err.message : err
-  );
-}
+  log('Published config');
 
-try {
-  // Update interaction if it exists
-  const publishInteraction = await redis.hgetall<
-    Record<'id' | 'token', string>
-  >('publish_callback');
-  if (publishInteraction && publishInteraction.id && publishInteraction.token) {
-    const rest = new REST({ version: '10' }).setToken(
-      process.env.DISCORD_BOT_TOKEN
-    );
+  //Respond to the interaction if it exists
+  await redis
+    .hgetall<Record<'id' | 'token', string>>('publish_callback')
+    .then(async publishInteraction => {
+      if (publishInteraction?.id && publishInteraction?.token) {
+        log('Responding to interaction');
+        const rest = new REST({ version: '10' }).setToken(
+          process.env.DISCORD_BOT_TOKEN
+        );
 
-    (await rest.patch(
-      Routes.webhookMessage(
-        process.env.DISCORD_CLIENT_ID,
-        publishInteraction.token,
-        '@original'
-      ),
-      {
-        body: {
-          content:
-            'Published the config to Sky-Shards\nThank you for your contribution!',
-        } satisfies RESTPatchAPIInteractionOriginalResponseJSONBody,
+        await rest.patch(
+          Routes.webhookMessage(
+            process.env.DISCORD_CLIENT_ID,
+            publishInteraction.token,
+            '@original'
+          ),
+          {
+            body: {
+              content:
+                'Config has been published to Sky-Shards\nThank you for your contribution!',
+            } satisfies RESTPatchAPIInteractionOriginalResponseJSONBody,
+          }
+        );
+
+        await redis.del('publish_callback');
+        log('Responded to interaction');
       }
-    )) as RESTPatchAPIInteractionOriginalResponseJSONBody;
+    });
 
-    await redis.del('publish_callback');
-  }
+  // Send the logs to the webhook
+  await axios.post(process.env.DISCORD_WEBHOOK_URL, {
+    content: 'Configuration published\n\n```' + logs.join('\n') + '```',
+    flags: MessageFlags.SuppressNotifications,
+  } satisfies RESTPostAPIWebhookWithTokenJSONBody);
 } catch (err) {
-  console.error(
-    'Failed to update Discord Interaction',
-    err && typeof err === 'object' && 'message' in err ? err.message : err
-  );
+  errorLog('Failed to publish config', err);
+  // Send the logs to the webhook
+  await axios.post(process.env.DISCORD_WEBHOOK_URL, {
+    content:
+      '<@702740689846272002>, Configuration publish failed\n\n```' +
+      logs.join('\n') +
+      '```',
+    allowed_mentions: { users: ['702740689846272002'] },
+  } satisfies RESTPostAPIWebhookWithTokenJSONBody);
 }
