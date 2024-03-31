@@ -17,15 +17,14 @@ import {
 import nacl from 'tweetnacl';
 import { DateTime } from 'luxon';
 import {
-  GlobalShardConfig,
-  memories,
-  parseDailyConfig,
-  getDailyShardConfig,
-  getParsedDailyShardConfig,
+  DailyConfig,
+  RemoteConfigResponse,
+  getParsedDailyConfig,
+  pushAuthorName,
 } from '../shared/lib.js';
 import { REST } from '@discordjs/rest';
 
-interface RequiredEnv {
+interface Env {
   UPSTASH_REDIS_REST_URL: string;
   UPSTASH_REDIS_REST_TOKEN: string;
   DISCORD_WEBHOOK_URL: string;
@@ -34,6 +33,7 @@ interface RequiredEnv {
   DISCORD_PUBLIC_KEY: string;
   DISCORD_BOT_TOKEN: string;
   CLOUDFLARE_DEPLOY_URL: string;
+  DISABLE_PUBLISH_DIFF: string | undefined;
 }
 // Environment variables are injected at build time, so cannot destructured, cannot access with []
 
@@ -74,7 +74,7 @@ function InteractionResponse(response: APIInteractionResponse): Response {
   });
 }
 
-export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
+export const onRequestPost: PagesFunction<Env> = async context => {
   // Request Validation (Check if request is from Discord)
   const request = context.request;
   const signature = request.headers.get('X-Signature-Ed25519');
@@ -137,6 +137,7 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
   });
 
   const resovledName = member.nick ?? member.user.global_name;
+  const isSuperUser = ['702740689846272002'].includes(member.user.id);
 
   // Handle Command
   if (interaction.type === InteractionType.ApplicationCommand) {
@@ -145,271 +146,17 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
       const { name, options } = interaction.data;
       const optionsMap = new Map(options?.map(option => [option.name, option]));
 
-      const publishReminder =
-        'Remember to </publish:1219872570669531247> the changes';
-
-      let date = DateTime.now().setZone('America/Los_Angeles');
-      const dateInput = optionsMap.get('date') as
-        | APIApplicationCommandInteractionDataStringOption
-        | undefined;
-
-      if (dateInput) {
-        // Verify Date
-        const dateIn = DateTime.fromISO(dateInput.value);
-        if (!dateIn.isValid) {
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'Invalid date' },
-          });
-        }
-
-        // Cannot be 3 day in the past
-        if (
-          dateIn < DateTime.now().minus({ days: 3 }) &&
-          member.user.id !== '702740689846272002'
-        ) {
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: {
-              content:
-                'Only <@702740689846272002> can set memory for dates older than 3 days',
-              allowed_mentions: { users: ['702740689846272002'] },
-            },
-          });
-        }
-        date = dateIn;
-      }
-      const isoDate = date.toISODate();
-      redis.sadd('edited_dates', isoDate);
-
-      // Set Daily Memory
-      if (name === 'set_memory') {
-        const memory = optionsMap.get(
-          'memory'
-        ) as APIApplicationCommandInteractionDataStringOption;
-        if (!memory || !memories.includes(memory.value as any)) {
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'Invalid memory option' },
-          });
-        }
-        const memoryValue = memories.indexOf(memory.value as any);
-        const { memory: prevMem, credits } = await getParsedDailyShardConfig(
-          redis,
-          ['memory', 'credits'],
-          date
-        );
-
-        if (!credits.includes(resovledName)) {
-          credits.push(resovledName);
-        }
-
-        await redis.hset(`daily:${isoDate}`, {
-          memory: memoryValue,
-          credits: credits.join(','),
-          lastModified: DateTime.now(),
-          lastModifiedBy: member.user.id,
-        });
-
-        let prevMemStr = isNaN(prevMem) ? 'unset' : memories[prevMem];
-
-        return InteractionResponse({
-          type: InteractionResponseType.ChannelMessageWithSource,
-          data: {
-            content:
-              `Memory for ${isoDate} has been changed from ` +
-              `${prevMemStr} to \`${memory.value}\`` +
-              publishReminder,
-          },
-        });
-      }
-
-      // Set Daily Variation
-      if (name === 'set_variation') {
-        const variation = optionsMap.get(
-          'variation'
-        ) as APIApplicationCommandInteractionDataNumberOption;
-        if (!variation) {
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: {
-              content: 'Invalid variation option',
-            },
-          });
-        }
-        const variationValue = variation.value;
-
-        const { variation: prevVar, credits } = await getParsedDailyShardConfig(
-          redis,
-          ['variation', 'credits'],
-          date
-        );
-
-        if (!credits.includes(resovledName)) {
-          credits.push(resovledName);
-        }
-
-        await redis.hset(`daily:${isoDate}`, {
-          variation: variationValue,
-          lastModified: DateTime.now(),
-          lastModifiedBy: member.user.id,
-          credits: credits.join(','),
-        });
-
-        return InteractionResponse({
-          type: InteractionResponseType.ChannelMessageWithSource,
-          data: {
-            content:
-              `Variation for ${isoDate} has been changed from ` +
-              `${prevVar ?? '`unset`'} to \`${variationValue}\`` +
-              publishReminder,
-          },
-        });
-      }
-
-      // Set Daily Is Bugged
-      if (name === 'set_bugged_status') {
-        const isBugged = optionsMap.get(
-          'is_bugged'
-        ) as APIApplicationCommandInteractionDataBooleanOption;
-        const bugType = optionsMap.get(
-          'bug_type'
-        ) as APIApplicationCommandInteractionDataStringOption;
-
-        if (!isBugged) {
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'is_bugged option is required' },
-          });
-        }
-
-        if (isBugged.value) {
-          if (!bugType) {
-            return InteractionResponse({
-              type: InteractionResponseType.ChannelMessageWithSource,
-              data: { content: 'bug_type option is required' },
-            });
-          }
-          if (!['noShard', 'noMemory'].includes(bugType.value)) {
-            return InteractionResponse({
-              type: InteractionResponseType.ChannelMessageWithSource,
-              data: { content: 'bug_type is required' },
-            });
-          }
-
-          const {
-            isBugged: prevIsBugged,
-            bugType: prevBugType,
-            credits,
-          } = await getParsedDailyShardConfig(
-            redis,
-            ['isBugged', 'bugType', 'credits'],
-            date
-          );
-
-          if (!credits.includes(resovledName)) {
-            credits.push(resovledName);
-          }
-
-          await redis.hset(`daily:${isoDate}`, {
-            isBugged: true,
-            bugType: bugType.value,
-            lastModified: DateTime.now(),
-            lastModifiedBy: member.user.id,
-            credits: credits.join(','),
-          });
-
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: {
-              content:
-                `Shard for ${isoDate} has been set as bugged (${bugType.value})` +
-                (prevIsBugged ? ` from ${prevBugType}` : ' from `unset`') +
-                publishReminder,
-            },
-          });
-        } else {
-          await redis.hdel(`daily:${isoDate}`, 'isBugged', 'bugType');
-
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: {
-              content:
-                `Shard for ${isoDate} has been set as not bugged` +
-                publishReminder,
-            },
-          });
-        }
-      }
-
-      // Set Daily Is Disabled
-      if (name === 'set_disabled_status') {
-        const isDisabled = optionsMap.get(
-          'is_disabled'
-        ) as APIApplicationCommandInteractionDataBooleanOption;
-        const disabledReason = optionsMap.get(
-          'disabled_reason'
-        ) as APIApplicationCommandInteractionDataStringOption;
-
-        if (!isDisabled) {
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'is_disabled option is required' },
-          });
-        }
-
-        if (isDisabled.value) {
-          if (!disabledReason) {
-            return InteractionResponse({
-              type: InteractionResponseType.ChannelMessageWithSource,
-              data: { content: 'disabled_reason is required' },
-            });
-          }
-
-          const { isDisabled: prevIsDisabled, credits } =
-            await getParsedDailyShardConfig(
-              redis,
-              ['isDisabled', 'credits'],
-              date
-            );
-
-          if (!credits.includes(resovledName)) {
-            credits.push(resovledName);
-          }
-
-          await redis.hset(`daily:${isoDate}`, {
-            isDisabled: true,
-            disabledReason: disabledReason.value,
-            lastModified: DateTime.now(),
-            lastModifiedBy: member.user.id,
-            credits: credits.join(','),
-          });
-
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: {
-              content:
-                `Shard for ${isoDate} has been set as disabled (${disabledReason.value})` +
-                (prevIsDisabled ? ` from ${prevIsDisabled}` : ' from `unset`') +
-                publishReminder,
-            },
-          });
-        } else {
-          await redis.hdel(`daily:${isoDate}`, 'isDisabled', 'disabledReason');
-
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: {
-              content:
-                `Shard for ${isoDate} has been set as not disabled` +
-                publishReminder,
-            },
-          });
-        }
-      }
-
-      // Publish
+      // Publish Command
       if (name === 'publish') {
+        const editedFields = await redis.smembers('edited_fields');
+        if (editedFields.length === 0) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: { content: 'No changes to publish' },
+          });
+        }
+
+        // If there are changes, defer the response
         discordRest.post(
           Routes.interactionCallback(interaction.id, interaction.token),
           {
@@ -418,70 +165,36 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
             }),
           }
         );
-        const publishedDataRes = await fetch(
-          'https://sky-shardfig.plutoy.top/minified.json'
-        );
-        const publishedData =
-          ((await publishedDataRes.json()) as GlobalShardConfig).dailyMap[
-            isoDate
-          ] ?? {};
-        const unpublishDataStringified =
-          (await getDailyShardConfig(redis))?.[1] ?? {};
-        const unpublishData = parseDailyConfig(unpublishDataStringified);
-        const fields: APIEmbedField[] = [];
 
-        // Compare published data with current data
-        if (publishedData.memory !== unpublishData.memory) {
-          const prev = memories[publishedData.memory];
-          const next = memories[unpublishData.memory];
-          fields.push({
-            name: 'Memory',
-            value: `\`${prev}\` -> \`${next}\``,
-          });
+        let liveConfig: RemoteConfigResponse | null = null;
+
+        // Fetch live config from cdn
+        if (context.env.DISABLE_PUBLISH_DIFF !== 'true') {
+          liveConfig = (await fetch(
+            'http://sky-shards.plutoy.top/minified'
+          ).then(res =>
+            res.status === 200 ? res.json() : null
+          )) as RemoteConfigResponse | null;
         }
 
-        if (publishedData.variation !== unpublishData.variation) {
-          fields.push({
-            name: 'Variation',
-            value: `\`${publishedData.variation}\` -> \`${unpublishData.variation}\``,
-          });
-        }
+        let hasGlobalChanged = false;
+        const fetchedDailies = new Map<string, DailyConfig>();
+        const changes: APIEmbedField[] = [];
 
-        if (publishedData.isBugged !== unpublishData.isBugged) {
-          fields.push({
-            name: 'Is Bugged',
-            value: `\`${publishedData.isBugged}\` -> \`${unpublishData.isBugged}\``,
-          });
-        }
+        for (const f of editedFields) {
+          if (f === 'global') {
+            hasGlobalChanged = true;
+            continue;
+          }
 
-        if (publishedData.bugType !== unpublishData.bugType) {
-          fields.push({
-            name: 'Bug Type',
-            value: `\`${publishedData.bugType}\` -> \`${unpublishData.bugType}\``,
-          });
-        }
-
-        if (publishedData.isDisabled !== unpublishData.isDisabled) {
-          fields.push({
-            name: 'Is Disabled',
-            value: `\`${publishedData.isDisabled}\` -> \`${unpublishData.isDisabled}\``,
-          });
-        }
-
-        if (publishedData.disabledReason !== unpublishData.disabledReason) {
-          fields.push({
-            name: 'Disabled Reason',
-            value: `\`${publishedData.disabledReason}\` -> \`${unpublishData.disabledReason}\``,
-          });
-        }
-
-        if (fields.length === 0) {
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: {
-              content: 'No changes to publish',
-            },
-          });
+          const [, isoDate, fieldKey] = f.split(':');
+          let dailyConfig: DailyConfig;
+          if (fetchedDailies.has(isoDate)) {
+            dailyConfig = fetchedDailies.get(isoDate);
+          } else {
+            dailyConfig = await getParsedDailyConfig(redis, isoDate);
+            fetchedDailies.set(isoDate, dailyConfig);
+          }
         }
 
         const prevConfirmingUser = await redis.set(
@@ -525,6 +238,41 @@ export const onRequestPost: PagesFunction<RequiredEnv> = async context => {
             ],
           },
         });
+      }
+
+      const publishReminder =
+        'Remember to </publish:1219872570669531247> the after your changes are completed';
+
+      let date = DateTime.now().setZone('America/Los_Angeles');
+      const dateInput = optionsMap.get('date') as
+        | APIApplicationCommandInteractionDataStringOption
+        | undefined;
+
+      if (dateInput) {
+        // Verify Date
+        const dateIn = DateTime.fromISO(dateInput.value);
+        if (!dateIn.isValid) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: { content: 'Invalid date' },
+          });
+        }
+
+        // Cannot be 3 day in the past
+        if (
+          dateIn < DateTime.now().minus({ days: 3 }) &&
+          member.user.id !== '702740689846272002'
+        ) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: {
+              content:
+                'Only <@702740689846272002> can set memory for dates older than 3 days',
+              allowed_mentions: { users: ['702740689846272002'] },
+            },
+          });
+        }
+        date = dateIn;
       }
     }
   } else if (interaction.type === InteractionType.MessageComponent) {
