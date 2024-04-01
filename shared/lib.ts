@@ -144,6 +144,8 @@ export function getShardInfo(date: DateTime, override?: Override) {
   };
 }
 
+export type ShardInfo = ReturnType<typeof getShardInfo>;
+
 export interface DailyConfig {
   memory?: number | null;
   memoryBy?: string | null;
