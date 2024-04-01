@@ -10,6 +10,13 @@ export const memories = [
   'Elder',
 ] as const;
 
+export const commonOverrideReasons = {
+  event_area: 'Disabled due to event occuring in the area',
+  bugged_shard: 'Bugged, Shard not working',
+  bugged_memory: "Can't access the memory",
+  tgc_altered: 'Altered by TGC',
+};
+
 // Used to validate variation input, not listed = 1
 export const numMapVarients = {
   'prairie.butterfly': 3,

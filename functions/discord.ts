@@ -19,8 +19,12 @@ import { DateTime } from 'luxon';
 import {
   DailyConfig,
   RemoteConfigResponse,
+  getAuthorNames,
   getParsedDailyConfig,
+  memories,
+  commonOverrideReasons,
   pushAuthorName,
+  getGlobalShardConfig,
 } from '../shared/lib.js';
 import { REST } from '@discordjs/rest';
 
@@ -65,6 +69,23 @@ function valueToUint8Array(
   throw new Error(
     'Unrecognized value type, must be one of: string, Buffer, ArrayBuffer, Uint8Array'
   );
+}
+
+function formatField(fieldName: string, value: any) {
+  if (fieldName === 'memory') {
+    return '`' + memories[value as number] + '`';
+  } else if (fieldName === 'overrideReason') {
+    const v = value as string;
+    if (v.startsWith('"')) {
+      return '`' + v.substring(1, -1) + '`';
+    } else if (v in commonOverrideReasons) {
+      return commonOverrideReasons[v];
+    } else {
+      return '`Unknown Reason Key: ' + v + '`';
+    }
+  } else if (typeof value === 'number') {
+    return value.toString();
+  }
 }
 
 function InteractionResponse(response: APIInteractionResponse): Response {
@@ -148,7 +169,10 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
       // Publish Command
       if (name === 'publish') {
-        const editedFields = await redis.smembers('edited_fields');
+        const [editedFields, authorNames] = await Promise.all([
+          redis.smembers('edited_fields'),
+          getAuthorNames(redis),
+        ]);
         if (editedFields.length === 0) {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
@@ -179,7 +203,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
         let hasGlobalChanged = false;
         const fetchedDailies = new Map<string, DailyConfig>();
-        const changes: APIEmbedField[] = [];
+        let changes = '';
 
         for (const f of editedFields) {
           if (f === 'global') {
@@ -195,6 +219,35 @@ export const onRequestPost: PagesFunction<Env> = async context => {
             dailyConfig = await getParsedDailyConfig(redis, isoDate);
             fetchedDailies.set(isoDate, dailyConfig);
           }
+
+          const dbVal = dailyConfig[fieldKey];
+
+          let diff: string;
+          const liveVal = liveConfig?.dailiesMap?.[isoDate]?.[fieldKey];
+          if (liveVal) {
+            if (liveVal !== dbVal) {
+              continue;
+            }
+
+            diff =
+              formatField(fieldKey, liveVal) +
+              ' -> ' +
+              formatField(fieldKey, dbVal);
+          } else {
+            diff = '~~unknown~~' + ' -> ' + formatField(fieldKey, dbVal);
+          }
+
+          // changes.push([f, diff]);
+          changes += `\n**${f}**: ${diff}`;
+        }
+
+        if (hasGlobalChanged) {
+          changes =
+            `\n**Global**: \n\`\`\`json\n${JSON.stringify(
+              await getGlobalShardConfig(redis),
+              null,
+              2
+            )}\n\`\`\`` + changes;
         }
 
         const prevConfirmingUser = await redis.set(
@@ -208,13 +261,13 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           data: {
             embeds: [
               {
-                title: `Confirm Publish for ${isoDate}`,
+                title: `Confirm Publish for the following changes`,
                 description:
-                  `Please confirm the following changes for ${isoDate}` +
                   (prevConfirmingUser
-                    ? `\nRequest by <@${prevConfirmingUser}> has been replaced`
-                    : ''),
-                fields,
+                    ? `Request by <@${prevConfirmingUser}> has been replaced\n\n`
+                    : '') +
+                  'Please confirm the following changes: ' +
+                  changes,
               },
             ],
             components: [
