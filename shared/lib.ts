@@ -1,5 +1,5 @@
 import type { Redis } from '@upstash/redis';
-import { DateTime } from 'luxon';
+import { DateTime, Duration } from 'luxon';
 
 export const memories = [
   'Jellyfish',
@@ -15,6 +15,74 @@ export const commonOverrideReasons = {
   bugged_shard: 'Bugged, Shard not working',
   bugged_memory: "Can't access the memory",
   tgc_altered: 'Altered by TGC',
+};
+
+export interface Override {
+  hasShard?: boolean;
+  isRed?: boolean;
+  group?: number;
+  realm?: number;
+  map?: string;
+}
+
+const landOffset = Duration.fromObject({ minutes: 8, seconds: 40 }); //after start
+const endOffset = Duration.fromObject({ hours: 4 }); //after start
+
+const blackShardInterval = Duration.fromObject({ hours: 8 });
+const redShardInterval = Duration.fromObject({ hours: 6 });
+
+const realms = ['prairie', 'forest', 'valley', 'wasteland', 'vault'] as const;
+
+interface ShardConfig {
+  noShardWkDay: number[];
+  offset: Duration;
+  interval: Duration;
+  maps: [string, string, string, string, string];
+  defRewardAC?: number;
+}
+
+// prettier-ignore
+const shardsInfo = [
+  {
+    noShardWkDay: [6, 7], //Sat;Sun
+    interval: blackShardInterval,
+    offset: Duration.fromObject({ hours: 1, minutes: 50 }),
+    maps: ['prairie.butterfly', 'forest.brook', 'valley.rink', 'wasteland.temple', 'vault.starlight'],
+  },
+  {
+    noShardWkDay: [7, 1], //Sun;Mon
+    interval: blackShardInterval,
+    offset: Duration.fromObject({ hours: 2, minutes: 10 }),
+    maps: ['prairie.village', 'forest.boneyard', 'valley.rink', 'wasteland.battlefield', 'vault.starlight'],
+  },
+  {
+    noShardWkDay: [1, 2], //Mon;Tue
+    interval: redShardInterval,
+    offset: Duration.fromObject({ hours: 7, minutes: 40 }),
+    maps: ['prairie.cave', 'forest.end', 'valley.dreams', 'wasteland.graveyard', 'vault.jelly'],
+    defRewardAC: 2,
+  },
+  {
+    noShardWkDay: [2, 3], //Tue;Wed
+    interval: redShardInterval,
+    offset: Duration.fromObject({ hours: 2, minutes: 20 }),
+    maps: ['prairie.bird', 'forest.tree', 'valley.dreams', 'wasteland.crab', 'vault.jelly'],
+    defRewardAC: 2.5,
+  },
+  {
+    noShardWkDay: [3, 4], //Wed;Thu
+    interval: redShardInterval,
+    offset: Duration.fromObject({ hours: 3, minutes: 30 }),
+    maps: ['prairie.island', 'forest.sunny', 'valley.hermit', 'wasteland.ark', 'vault.jelly'],
+    defRewardAC: 3.5,
+  },
+] satisfies ShardConfig[];
+
+const overrideRewardAC: Record<string, number> = {
+  'forest.end': 2.5,
+  'valley.dreams': 2.5,
+  'forest.tree': 3.5,
+  'vault.jelly': 3.5,
 };
 
 // Used to validate variation input, not listed = 1
@@ -36,23 +104,44 @@ export const numMapVarients = {
   'vault.jelly': 2,
 };
 
-export function getShardMapInfo(date: DateTime) {
-  const dayOfMth = date.day;
-  const isRed = dayOfMth % 2 === 0;
-  const realmIndex = dayOfMth % 5;
-  const mapSetIndex = isRed
-    ? (((dayOfMth - 1) / 2) % 3) + 2
-    : (dayOfMth / 2) % 2;
-  // prettier-ignore
-  const map = ([
-    ['prairie.butterfly', 'forest.brook', 'valley.rink', 'wasteland.temple', 'vault.starlight'],
-    ['prairie.village', 'forest.boneyard', 'valley.rink', 'wasteland.battlefield', 'vault.starlight'],
-    ['prairie.cave', 'forest.end', 'valley.dreams', 'wasteland.graveyard', 'vault.jelly'],
-    ['prairie.bird', 'forest.tree', 'valley.dreams', 'wasteland.crab', 'vault.jelly'],
-    ['prairie.island', 'forest.sunny', 'valley.hermit', 'wasteland.ark', 'vault.jelly'],
-  ])[mapSetIndex][realmIndex];
-  const numVariants = numMapVarients[map as keyof typeof numMapVarients] ?? 1;
-  return { map, numVariants };
+export function getShardInfo(date: DateTime, override?: Override) {
+  const today = date.setZone('America/Los_Angeles').startOf('day');
+  const [dayOfMth, dayOfWk] = [today.day, today.weekday];
+  const isRed = override?.isRed ?? dayOfMth % 2 === 1;
+  const realmIdx = override?.realm ?? (dayOfMth - 1) % 5;
+  const infoIndex =
+    override?.group ??
+    (isRed ? (((dayOfMth - 1) / 2) % 3) + 2 : (dayOfMth / 2) % 2);
+  const { noShardWkDay, interval, offset, maps, defRewardAC } =
+    shardsInfo[infoIndex];
+  const hasShard = override?.hasShard ?? !noShardWkDay.includes(dayOfWk);
+  const map = override?.map ?? maps[realmIdx];
+  const rewardAC = isRed ? overrideRewardAC[map] ?? defRewardAC : undefined;
+  const numVarient = numMapVarients[map as keyof typeof numMapVarients] ?? 1; 
+  let firstStart = today.plus(offset);
+  //Detect timezone changed, happens on Sunday, shardInfoIdx is 2,3 or 4. Offset > 2hrs
+  if (dayOfWk === 7 && today.isInDST !== firstStart.isInDST) {
+    firstStart = firstStart.plus({ hours: firstStart.isInDST ? -1 : 1 });
+  }
+  const occurrences = Array.from({ length: 3 }, (_, i) => {
+    const start = firstStart.plus(interval.mapUnits(x => x * i));
+    const land = start.plus(landOffset);
+    const end = start.plus(endOffset);
+    return { start, land, end };
+  });
+  return {
+    date,
+    isRed,
+    hasShard,
+    offset,
+    interval,
+    lastEnd: occurrences[2].end,
+    realm: realms[realmIdx],
+    map,
+    numVarient,
+    rewardAC,
+    occurrences,
+  };
 }
 
 export interface DailyConfig {
@@ -60,13 +149,7 @@ export interface DailyConfig {
   memoryBy?: string | null;
   variation?: number | null;
   variationBy?: string | null;
-  override?: {
-    hasShard?: boolean;
-    isRed?: boolean;
-    realm?: number;
-    map?: string;
-    offset?: number;
-  } | null;
+  override?: Override | null;
   overrideBy?: string | null;
   overrideReason?: string | null;
   version?: number;
@@ -148,12 +231,7 @@ export async function setDailyConfig(
   date: DateTime,
   config: Omit<
     DailyConfig,
-    | 'lastModified'
-    | 'version'
-    | 'authorMap'
-    | 'memoryBy'
-    | 'variationBy'
-    | 'overrideBy'
+    'lastModified' | 'version' | 'memoryBy' | 'variationBy' | 'overrideBy'
   >,
   authorId: string
 ) {
