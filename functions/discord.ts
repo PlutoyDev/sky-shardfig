@@ -174,7 +174,7 @@ function generateOverwriteMenu(
     new EmbedBuilder()
       .setTitle('Default calculated values')
       .setColor(0x8a76b1)
-      .addFields(...generateShardInfoEmbedFields(info))
+      .addFields(generateShardInfoEmbedFields(info))
       .toJSON(),
   ];
   const components: RESTPostAPIWebhookWithTokenJSONBody['components'] = [];
@@ -184,7 +184,7 @@ function generateOverwriteMenu(
     new EmbedBuilder()
       .setTitle('Overwritten values (if any)')
       .setColor(0x8a76b1)
-      .addFields(...generateShardInfoEmbedFields(overwrittenInfo))
+      .addFields(generateShardInfoEmbedFields(overwrittenInfo))
       .toJSON(),
   );
 
