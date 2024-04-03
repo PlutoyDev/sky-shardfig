@@ -1,14 +1,7 @@
 import type { Redis } from '@upstash/redis';
 import { DateTime, Duration } from 'luxon';
 
-export const memories = [
-  'Jellyfish',
-  'Crab',
-  'Manta',
-  'Krill',
-  'Whale',
-  'Elder',
-] as const;
+export const memories = ['Jellyfish', 'Crab', 'Manta', 'Krill', 'Whale', 'Elder'] as const;
 
 export const commonOverrideReasons = {
   event_area: 'Disabled due to event occuring in the area',
@@ -31,7 +24,39 @@ const endOffset = Duration.fromObject({ hours: 4 }); //after start
 const blackShardInterval = Duration.fromObject({ hours: 8 });
 const redShardInterval = Duration.fromObject({ hours: 6 });
 
-const realms = ['prairie', 'forest', 'valley', 'wasteland', 'vault'] as const;
+export const stringsEn = {
+  skyRealms: {
+    prairie: 'Daylight Prairie',
+    forest: 'Hidden Forest',
+    valley: 'Valley of Triumph',
+    wasteland: 'Golden Wasteland',
+    vault: 'Vault of Knowledge',
+  },
+  skyMaps: {
+    'prairie.butterfly': 'Butterfly Fields',
+    'prairie.village': 'Village Islands',
+    'prairie.cave': 'Cave',
+    'prairie.bird': 'Bird Nest',
+    'prairie.island': 'Sanctuary Island',
+    'forest.brook': 'Brook',
+    'forest.boneyard': 'Boneyard',
+    'forest.end': 'Forest Garden',
+    'forest.tree': 'Treehouse',
+    'forest.sunny': 'Elevated Clearing',
+    'valley.rink': 'Ice Rink',
+    'valley.dreams': 'Village of Dreams',
+    'valley.hermit': 'Hermit valley',
+    'wasteland.temple': 'Broken Temple',
+    'wasteland.battlefield': 'Battlefield',
+    'wasteland.graveyard': 'Graveyard',
+    'wasteland.crab': 'Crab Field',
+    'wasteland.ark': 'Forgotten Ark',
+    'vault.starlight': 'Starlight Desert',
+    'vault.jelly': 'Jellyfish Cove',
+  },
+};
+
+export const realms = ['prairie', 'forest', 'valley', 'wasteland', 'vault'] as const;
 
 interface ShardConfig {
   noShardWkDay: number[];
@@ -42,7 +67,7 @@ interface ShardConfig {
 }
 
 // prettier-ignore
-const shardsInfo = [
+export const shardsInfo = [
   {
     noShardWkDay: [6, 7], //Sat;Sun
     interval: blackShardInterval,
@@ -109,15 +134,12 @@ export function getShardInfo(date: DateTime, override?: Override) {
   const [dayOfMth, dayOfWk] = [today.day, today.weekday];
   const isRed = override?.isRed ?? dayOfMth % 2 === 1;
   const realmIdx = override?.realm ?? (dayOfMth - 1) % 5;
-  const infoIndex =
-    override?.group ??
-    (isRed ? (((dayOfMth - 1) / 2) % 3) + 2 : (dayOfMth / 2) % 2);
-  const { noShardWkDay, interval, offset, maps, defRewardAC } =
-    shardsInfo[infoIndex];
+  const infoIndex = override?.group ?? (isRed ? (((dayOfMth - 1) / 2) % 3) + 2 : (dayOfMth / 2) % 2);
+  const { noShardWkDay, interval, offset, maps, defRewardAC } = shardsInfo[infoIndex];
   const hasShard = override?.hasShard ?? !noShardWkDay.includes(dayOfWk);
   const map = override?.map ?? maps[realmIdx];
   const rewardAC = isRed ? overrideRewardAC[map] ?? defRewardAC : undefined;
-  const numVarient = numMapVarients[map as keyof typeof numMapVarients] ?? 1; 
+  const numVarient = numMapVarients[map as keyof typeof numMapVarients] ?? 1;
   let firstStart = today.plus(offset);
   //Detect timezone changed, happens on Sunday, shardInfoIdx is 2,3 or 4. Offset > 2hrs
   if (dayOfWk === 7 && today.isInDST !== firstStart.isInDST) {
@@ -133,10 +155,11 @@ export function getShardInfo(date: DateTime, override?: Override) {
     date,
     isRed,
     hasShard,
+    group: infoIndex,
     offset,
     interval,
     lastEnd: occurrences[2].end,
-    realm: realms[realmIdx],
+    realm: realmIdx,
     map,
     numVarient,
     rewardAC,
@@ -179,15 +202,13 @@ export async function getDailyConfig<
     'override',
     'overrideBy',
     'overrideReason',
-    'lastModified'
-  ]
+    'lastModified',
+  ],
 >(
   redis: Redis,
   date: DateTime | string,
-  keys?: Keys
-): Promise<
-  Pick<DailyConfigFromRedis, Keys[number]> | DailyConfigFromRedis | undefined
-> {
+  keys?: Keys,
+): Promise<Pick<DailyConfigFromRedis, Keys[number]> | DailyConfigFromRedis | undefined> {
   if (typeof date !== 'string') date = date.toISODate() as string;
   if (!date) return undefined;
   const hashKey = `daily:${date}`;
@@ -195,20 +216,15 @@ export async function getDailyConfig<
     return (await redis.hgetall(hashKey)) as DailyConfigFromRedis;
   }
 
-  return (await redis.hmget(hashKey, ...keys)) as Pick<
-    DailyConfigFromRedis,
-    Keys[number]
-  >;
+  return (await redis.hmget(hashKey, ...keys)) as Pick<DailyConfigFromRedis, Keys[number]>;
 }
 
 export async function getParsedDailyConfig<Keys extends (keyof DailyConfig)[]>(
   redis: Redis,
   date: DateTime | string,
-  keys?: Keys
+  keys?: Keys,
 ) {
-  const config = (await getDailyConfig(redis, date, keys)) as
-    | DailyConfigFromRedis
-    | undefined;
+  const config = (await getDailyConfig(redis, date, keys)) as DailyConfigFromRedis | undefined;
   if (!config) return undefined;
 
   const parsedConfig: DailyConfig = {};
@@ -218,11 +234,9 @@ export async function getParsedDailyConfig<Keys extends (keyof DailyConfig)[]>(
   if (config.variationBy) parsedConfig.variationBy = config.variationBy;
   if (config.override) parsedConfig.override = JSON.parse(config.override);
   if (config.overrideBy) parsedConfig.overrideBy = config.overrideBy;
-  if (config.overrideReason)
-    parsedConfig.overrideReason = config.overrideReason;
+  if (config.overrideReason) parsedConfig.overrideReason = config.overrideReason;
   if (config.version) parsedConfig.version = parseInt(config.version);
-  if (config.lastModified)
-    parsedConfig.lastModified = DateTime.fromISO(config.lastModified);
+  if (config.lastModified) parsedConfig.lastModified = DateTime.fromISO(config.lastModified);
 
   if (!keys) return parsedConfig as DailyConfig;
   return parsedConfig as Pick<DailyConfig, Keys[number]>;
@@ -231,16 +245,12 @@ export async function getParsedDailyConfig<Keys extends (keyof DailyConfig)[]>(
 export async function setDailyConfig(
   redis: Redis,
   date: DateTime,
-  config: Omit<
-    DailyConfig,
-    'lastModified' | 'version' | 'memoryBy' | 'variationBy' | 'overrideBy'
-  >,
-  authorId: string
+  config: Omit<DailyConfig, 'lastModified' | 'version' | 'memoryBy' | 'variationBy' | 'overrideBy'>,
+  authorId: string,
 ) {
   const isoDate = date.toISODate();
   if (!isoDate) throw new Error('Invalid date');
-  if (!config.memory && !config.variation && !config.override)
-    throw new Error('No config to set');
+  if (!config.memory && !config.variation && !config.override) throw new Error('No config to set');
 
   // TODO: Add action log
 
@@ -293,12 +303,8 @@ export interface GlobalConfig {
   buggedReason?: string;
 }
 
-export async function getGlobalShardConfig(
-  redis: Redis
-): Promise<GlobalConfig | undefined> {
-  const config = await redis.hgetall<Record<keyof GlobalConfig, string>>(
-    'global'
-  );
+export async function getGlobalShardConfig(redis: Redis): Promise<GlobalConfig | undefined> {
+  const config = await redis.hgetall<Record<keyof GlobalConfig, string>>('global');
   if (!config) return undefined;
   if (config.bugged && config.bugged === 'true') {
     return { bugged: true, buggedReason: config.buggedReason };
@@ -307,8 +313,7 @@ export async function getGlobalShardConfig(
 
 export async function setGlobalShardConfig(redis: Redis, data: GlobalConfig) {
   if (data.bugged) {
-    if (!data.buggedReason)
-      throw new Error('Missing reason for setting bugged state');
+    if (!data.buggedReason) throw new Error('Missing reason for setting bugged state');
     await redis.hset('global', {
       bugged: true,
       buggedReason: data.buggedReason,
@@ -318,11 +323,7 @@ export async function setGlobalShardConfig(redis: Redis, data: GlobalConfig) {
   await redis.sadd('edited_fields', 'global');
 }
 
-export async function pushAuthorName(
-  redis: Redis,
-  authorId: string,
-  authorName: string
-) {
+export async function pushAuthorName(redis: Redis, authorId: string, authorName: string) {
   await redis.hset('author_names', { [authorId]: authorName });
 }
 
