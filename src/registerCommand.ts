@@ -6,7 +6,7 @@ import {
   RESTPutAPIApplicationGuildCommandsResult,
   Routes,
 } from 'discord-api-types/v10';
-import { memories } from '../shared/lib.js';
+import { commonOverrideReasons, memories } from '../shared/lib.js';
 
 if (process.env.DISCORD_CLIENT_ID === undefined) {
   throw new Error('Missing required environment variable: DISCORD_CLIENT_ID');
@@ -38,7 +38,15 @@ try {
       .addStringOption(option =>
         option.setName('date').setDescription('Date of the config (YYYY-MM-DD, default today)'),
       )
-      .addBooleanOption(option => option.setName('has_override').setDescription('Override the default calculation'))
+      .addStringOption(option =>
+        option
+          .setName('override_reason_key')
+          .setDescription('The reason for the override (translatable key)')
+          .addChoices(...Object.entries(commonOverrideReasons).map(([k, str]) => ({ name: str, value: k }))),
+      )
+      .addStringOption(option =>
+        option.setName('override_reason').setDescription('The reason for the override (custom text)'),
+      )
       .toJSON(),
   );
 
