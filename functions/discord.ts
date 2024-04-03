@@ -152,7 +152,7 @@ function generateShardInfoEmbedFields(info: ShardInfo): APIEmbedField[] {
     { name: 'Shard?', value: info.hasShard ? 'Yes' : 'No', inline: true },
     { name: 'Color', value: info.isRed ? 'Red' : 'Black', inline: true },
     { name: 'Group', value: info.group.toString(), inline: true },
-    { name: 'Realm', value: stringsEn.skyRealms[info.realm], inline: true },
+    { name: 'Realm', value: stringsEn.skyRealms[realms[info.realm]], inline: true },
     { name: 'Map', value: info.map, inline: true },
     {
       name: 'Occurrences',
@@ -177,7 +177,6 @@ function generateOverwriteMenu(
       .addFields(generateShardInfoEmbedFields(info))
       .toJSON(),
   ];
-  const components: RESTPostAPIWebhookWithTokenJSONBody['components'] = [];
 
   const overwrittenInfo = getShardInfo(date, currentOverride);
   embeds.push(
