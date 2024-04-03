@@ -250,7 +250,14 @@ export async function setDailyConfig(
 ) {
   const isoDate = date.toISODate();
   if (!isoDate) throw new Error('Invalid date');
-  if (!config.memory && !config.variation && !config.override) throw new Error('No config to set');
+  if (
+    config.memory === undefined &&
+    config.variation === undefined &&
+    config.override === undefined &&
+    !config.overrideReason
+  ) {
+    throw new Error('No changes to set');
+  }
 
   // TODO: Add action log
 
@@ -275,14 +282,17 @@ export async function setDailyConfig(
     } else delField.push('variation', 'variationBy');
   }
 
+  if (overrideReason !== undefined) {
+    if (overrideReason) {
+      configStringified.overrideReason = overrideReason;
+    } else delField.push('overrideReason');
+  }
+
   if (override !== undefined) {
-    editedField.push('override', 'overrideReason');
     if (override) {
-      if (!config.overrideReason) throw new Error('Missing override reason');
       configStringified.override = JSON.stringify(config.override);
       configStringified.overrideBy = authorId;
-      configStringified.overrideReason = config.overrideReason;
-    } else delField.push('override', 'overrideBy', 'overrideReason');
+    } else delField.push('override', 'overrideBy');
   }
 
   configStringified.lastModified = DateTime.now().toISO();
