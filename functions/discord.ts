@@ -487,7 +487,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           date = dateIn;
         }
 
-        if (optionsMap.size > (dateInput ? 1 : 0)) {
+        if (optionsMap.size <= (dateInput ? 1 : 0)) {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
             data: { content: 'Nothing to set' },
