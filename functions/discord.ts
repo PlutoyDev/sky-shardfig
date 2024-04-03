@@ -1,11 +1,16 @@
+import { ButtonBuilder, EmbedBuilder, StringSelectMenuBuilder } from '@discordjs/builders';
+import { REST } from '@discordjs/rest';
 import { Redis } from '@upstash/redis/cloudflare';
-import type {
-  APIApplicationCommandInteractionDataBooleanOption,
+import {
   APIApplicationCommandInteractionDataNumberOption,
   APIApplicationCommandInteractionDataStringOption,
   APIEmbedField,
   APIInteraction,
   APIInteractionResponse,
+  APIInteractionResponseCallbackData,
+  ButtonStyle,
+  ComponentType,
+  RESTPostAPIWebhookWithTokenJSONBody,
 } from 'discord-api-types/v10';
 import {
   InteractionType,
@@ -14,8 +19,8 @@ import {
   ApplicationCommandType,
   Routes,
 } from 'discord-api-types/v10';
-import nacl from 'tweetnacl';
 import { DateTime } from 'luxon';
+import nacl from 'tweetnacl';
 import {
   DailyConfig,
   RemoteConfigResponse,
@@ -25,8 +30,14 @@ import {
   commonOverrideReasons,
   pushAuthorName,
   getGlobalShardConfig,
+  setDailyConfig,
+  getShardInfo,
+  Override,
+  ShardInfo,
+  shardsInfo,
+  stringsEn,
+  realms,
 } from '../shared/lib.js';
-import { REST } from '@discordjs/rest';
 
 interface Env {
   UPSTASH_REDIS_REST_URL: string;
@@ -41,10 +52,7 @@ interface Env {
 }
 // Environment variables are injected at build time, so cannot destructured, cannot access with []
 
-function valueToUint8Array(
-  value: Uint8Array | ArrayBuffer | string,
-  format?: string
-): Uint8Array {
+function valueToUint8Array(value: Uint8Array | ArrayBuffer | string, format?: string): Uint8Array {
   if (value == null) {
     return new Uint8Array();
   }
@@ -66,9 +74,7 @@ function valueToUint8Array(
   if (value instanceof Uint8Array) {
     return value;
   }
-  throw new Error(
-    'Unrecognized value type, must be one of: string, Buffer, ArrayBuffer, Uint8Array'
-  );
+  throw new Error('Unrecognized value type, must be one of: string, Buffer, ArrayBuffer, Uint8Array');
 }
 
 function formatField(fieldName: string, value: any) {
@@ -95,6 +101,186 @@ function InteractionResponse(response: APIInteractionResponse): Response {
   });
 }
 
+function InteractionCallback(
+  restClient: REST,
+  interaction: Pick<APIInteraction, 'id' | 'token'>,
+  response: APIInteractionResponse,
+): Promise<unknown> {
+  return restClient.post(Routes.interactionCallback(interaction.id, interaction.token), { body: response });
+}
+
+function encodeOverrideCustomId(date: DateTime, override: Omit<Override, 'reason' | 'by'>, custom?: string): string {
+  // Encode each property of the override into a string, null/undefined => -, boolean => 0/1, number => number, string => string
+  const keys = ['hasShard', 'isRed', 'group', 'realm', 'map'];
+  let customId = 'override_' + date.toFormat('yyMMdd');
+  for (const key of keys) {
+    const val = override[key];
+    if (val === undefined || val === null) customId += '-';
+    else if (typeof val === 'boolean') customId += val ? '1' : '0';
+    else if (typeof val === 'number') customId += val.toString();
+    else customId += val; //map is the only string at the last
+  }
+  return custom ? customId + '_' + custom : customId;
+}
+
+function decodeOverrideCustomId(customId: string): {
+  date: DateTime;
+  override: Omit<Override, 'reason' | 'by'>;
+  custom?: string;
+} {
+  // Decode each property of the override from a string, - => null, 0/1 => boolean, number => number, string => string
+  const keys = ['hasShard', 'isRed', 'group', 'realm', 'map'];
+  const override: Omit<Override, 'reason' | 'by'> = {};
+  const [, dateStr, dataStr, ...custom] = customId.split('_');
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const val = dataStr[i];
+    if (val === '-') continue;
+    else if (val === '0' || val === '1') override[key] = val === '1';
+    else if (!isNaN(parseInt(val))) override[key] = parseInt(val);
+    else override[key] = dataStr.substring(i);
+  }
+  return {
+    date: DateTime.fromFormat(dateStr, 'yyMMdd'),
+    override,
+    custom: custom.length > 0 ? custom.join('_') : undefined,
+  };
+}
+
+function generateShardInfoEmbedFields(info: ShardInfo): APIEmbedField[] {
+  return [
+    { name: 'Shard?', value: info.hasShard ? 'Yes' : 'No', inline: true },
+    { name: 'Color', value: info.isRed ? 'Red' : 'Black', inline: true },
+    { name: 'Group', value: info.group.toString(), inline: true },
+    { name: 'Realm', value: stringsEn.skyRealms[info.realm], inline: true },
+    { name: 'Map', value: info.map, inline: true },
+    {
+      name: 'Occurrences',
+      value: info.occurrences
+        .map(({ land, end }) => `${land.toFormat("'<t:'X':t>'")} - ${end.toFormat("'<t:'X':t>'")}`)
+        .join('\n'),
+    },
+  ];
+}
+
+function generateOverwriteMenu(
+  date: DateTime,
+  currentOverride?: Override,
+  final?: boolean,
+): APIInteractionResponseCallbackData {
+  const info = getShardInfo(date);
+
+  const embeds = [
+    new EmbedBuilder()
+      .setTitle('Default calculated values')
+      .setColor(0x8a76b1)
+      .addFields(generateShardInfoEmbedFields(info))
+      .toJSON(),
+  ];
+  const components: RESTPostAPIWebhookWithTokenJSONBody['components'] = [];
+
+  const overwrittenInfo = getShardInfo(date, currentOverride);
+  embeds.push(
+    new EmbedBuilder()
+      .setTitle('Overwritten values (if any)')
+      .setColor(0x8a76b1)
+      .addFields(generateShardInfoEmbedFields(overwrittenInfo))
+      .toJSON(),
+  );
+
+  if (!final) {
+    embeds.push(new EmbedBuilder().setTitle('Override Menu').setDescription('Pick your poison').toJSON());
+    return {
+      content: 'Override menu for ' + date.toISODate(),
+      embeds,
+      components: [
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            new StringSelectMenuBuilder()
+              .setCustomId(encodeOverrideCustomId(date, currentOverride, 'select_group'))
+              .setPlaceholder('Select a group')
+              .addOptions(
+                shardsInfo.map(({ noShardWkDay, offset: { hours, minutes } }, i) => ({
+                  label: `Start: ${hours}:${minutes.toString().padStart(2, '0')}, No Shard: ${noShardWkDay.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d % 7]).join('&')}`,
+                  value: i.toString(),
+                })),
+              )
+              .toJSON(),
+          ],
+        },
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            new ButtonBuilder()
+              .setCustomId(encodeOverrideCustomId(date, { ...currentOverride, hasShard: !overwrittenInfo.hasShard }))
+              .setLabel('Toggle Shard')
+              .setStyle(ButtonStyle.Primary)
+              .toJSON(),
+            new ButtonBuilder()
+              .setCustomId(encodeOverrideCustomId(date, { ...currentOverride, isRed: !overwrittenInfo.isRed }))
+              .setLabel('Toggle Color')
+              .setStyle(ButtonStyle.Primary)
+              .toJSON(),
+          ],
+        },
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            new StringSelectMenuBuilder()
+              .setCustomId(encodeOverrideCustomId(date, currentOverride, 'select_realm'))
+              .setPlaceholder('Select a realm')
+              .addOptions(
+                realms.map((r, i) => ({
+                  default: i === overwrittenInfo.realm,
+                  label: stringsEn.skyRealms[r],
+                  value: i.toString(),
+                })),
+              )
+              .toJSON(),
+          ],
+        },
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            new StringSelectMenuBuilder()
+              .setCustomId(encodeOverrideCustomId(date, currentOverride, 'select_map'))
+              .setPlaceholder('Select a map')
+              .addOptions(
+                Object.entries(stringsEn.skyMaps).map(([v, l]) => ({
+                  default: v === overwrittenInfo.map,
+                  label: l,
+                  value: v,
+                })),
+              )
+              .toJSON(),
+          ],
+        },
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            new ButtonBuilder()
+              .setCustomId(encodeOverrideCustomId(date, currentOverride, 'cancel'))
+              .setLabel('Cancel')
+              .setStyle(ButtonStyle.Danger)
+              .toJSON(),
+            new ButtonBuilder()
+              .setCustomId(encodeOverrideCustomId(date, currentOverride, 'confirm'))
+              .setLabel('Confirm')
+              .setStyle(ButtonStyle.Success)
+              .toJSON(),
+          ],
+        },
+      ],
+    };
+  }
+
+  return {
+    content: 'Finalized override for ' + date.toISODate(),
+    embeds,
+  };
+}
+
 export const onRequestPost: PagesFunction<Env> = async context => {
   // Request Validation (Check if request is from Discord)
   const request = context.request;
@@ -109,7 +295,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
   const isVerified = nacl.sign.detached.verify(
     valueToUint8Array(timestamp + body),
     valueToUint8Array(signature, 'hex'),
-    valueToUint8Array(context.env.DISCORD_PUBLIC_KEY, 'hex')
+    valueToUint8Array(context.env.DISCORD_PUBLIC_KEY, 'hex'),
   );
 
   if (!isVerified) {
@@ -148,9 +334,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
     });
   }
 
-  const discordRest = new REST({ version: '10' }).setToken(
-    context.env.DISCORD_BOT_TOKEN
-  );
+  const discordRest = new REST({ version: '10' }).setToken(context.env.DISCORD_BOT_TOKEN);
 
   const redis = new Redis({
     url: context.env.UPSTASH_REDIS_REST_URL,
@@ -169,10 +353,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
       // Publish Command
       if (name === 'publish') {
-        const [editedFields, authorNames] = await Promise.all([
-          redis.smembers('edited_fields'),
-          getAuthorNames(redis),
-        ]);
+        const [editedFields, authorNames] = await Promise.all([redis.smembers('edited_fields'), getAuthorNames(redis)]);
         if (editedFields.length === 0) {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
@@ -181,23 +362,18 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         }
 
         // If there are changes, defer the response
-        discordRest.post(
-          Routes.interactionCallback(interaction.id, interaction.token),
-          {
-            body: InteractionResponse({
-              type: InteractionResponseType.DeferredMessageUpdate,
-            }),
-          }
-        );
+        discordRest.post(Routes.interactionCallback(interaction.id, interaction.token), {
+          body: InteractionResponse({
+            type: InteractionResponseType.DeferredMessageUpdate,
+          }),
+        });
 
         let liveConfig: RemoteConfigResponse | null = null;
 
         // Fetch live config from cdn
         if (context.env.DISABLE_PUBLISH_DIFF !== 'true') {
-          liveConfig = (await fetch(
-            'http://sky-shards.plutoy.top/minified'
-          ).then(res =>
-            res.status === 200 ? res.json() : null
+          liveConfig = (await fetch('http://sky-shards.plutoy.top/minified').then(res =>
+            res.status === 200 ? res.json() : null,
           )) as RemoteConfigResponse | null;
         }
 
@@ -229,12 +405,9 @@ export const onRequestPost: PagesFunction<Env> = async context => {
               continue;
             }
 
-            diff =
-              formatField(fieldKey, liveVal) +
-              ' -> ' +
-              formatField(fieldKey, dbVal);
+            diff = formatField(fieldKey, liveVal) + ' -> ' + formatField(fieldKey, dbVal);
           } else {
-            diff = '~~unknown~~' + ' -> ' + formatField(fieldKey, dbVal);
+            diff = '~~undefined~~' + ' -> ' + formatField(fieldKey, dbVal);
           }
 
           // changes.push([f, diff]);
@@ -243,18 +416,11 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
         if (hasGlobalChanged) {
           changes =
-            `\n**Global**: \n\`\`\`json\n${JSON.stringify(
-              await getGlobalShardConfig(redis),
-              null,
-              2
-            )}\n\`\`\`` + changes;
+            `\n**Global**: \n\`\`\`json\n${JSON.stringify(await getGlobalShardConfig(redis), null, 2)}\n\`\`\`` +
+            changes;
         }
 
-        const prevConfirmingUser = await redis.set(
-          'publish_confirmation_user',
-          member.user.id,
-          { get: true }
-        );
+        const prevConfirmingUser = await redis.set('publish_confirmation_user', member.user.id, { get: true });
 
         return InteractionResponse({
           type: InteractionResponseType.ChannelMessageWithSource,
@@ -263,9 +429,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
               {
                 title: `Confirm Publish for the following changes`,
                 description:
-                  (prevConfirmingUser
-                    ? `Request by <@${prevConfirmingUser}> has been replaced\n\n`
-                    : '') +
+                  (prevConfirmingUser ? `Request by <@${prevConfirmingUser}> has been replaced\n\n` : '') +
                   'Please confirm the following changes: ' +
                   changes,
               },
@@ -293,43 +457,91 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         });
       }
 
-      const publishReminder =
-        'Remember to </publish:1219872570669531247> the after your changes are completed';
+      if (name === 'set_daily') {
+        // const publishReminder =
+        //   'Remember to </publish:1219872570669531247> the after your changes are completed';
 
-      let date = DateTime.now().setZone('America/Los_Angeles');
-      const dateInput = optionsMap.get('date') as
-        | APIApplicationCommandInteractionDataStringOption
-        | undefined;
+        let date = DateTime.now().setZone('America/Los_Angeles');
+        const dateInput = optionsMap.get('date') as APIApplicationCommandInteractionDataStringOption | undefined;
 
-      if (dateInput) {
-        // Verify Date
-        const dateIn = DateTime.fromISO(dateInput.value);
-        if (!dateIn.isValid) {
+        if (dateInput) {
+          // Verify Date
+          const dateIn = DateTime.fromISO(dateInput.value);
+          if (!dateIn.isValid) {
+            return InteractionResponse({
+              type: InteractionResponseType.ChannelMessageWithSource,
+              data: { content: 'Invalid date' },
+            });
+          }
+
+          // Cannot be 3 day in the past
+          if (dateIn < DateTime.now().minus({ days: 3 }) && member.user.id !== '702740689846272002') {
+            return InteractionResponse({
+              type: InteractionResponseType.ChannelMessageWithSource,
+              data: {
+                content: 'Only <@702740689846272002> can set memory for dates older than 3 days',
+                flags: MessageFlags.SuppressNotifications,
+              },
+            });
+          }
+          date = dateIn;
+        }
+
+        if (optionsMap.size > (dateInput ? 1 : 0)) {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'Invalid date' },
+            data: { content: 'Nothing to set' },
           });
         }
 
-        // Cannot be 3 day in the past
-        if (
-          dateIn < DateTime.now().minus({ days: 3 }) &&
-          member.user.id !== '702740689846272002'
-        ) {
-          return InteractionResponse({
+        const edits: Parameters<typeof setDailyConfig>[2] = {};
+        let editStr = '';
+
+        if (optionsMap.has('memory')) {
+          const memOpt = optionsMap.get('memory') as APIApplicationCommandInteractionDataNumberOption;
+          edits.memory = memOpt.value;
+          editStr += 'Memory set as ' + formatField('memory', memOpt.value) + '\n';
+        }
+
+        if (optionsMap.has('variation')) {
+          const variOpt = optionsMap.get('variation') as APIApplicationCommandInteractionDataNumberOption;
+          edits.variation = variOpt.value;
+          editStr += 'Variation set as `' + variOpt.value + '`\n';
+        }
+
+        let isOverriding = optionsMap.has('override_reason_key') || optionsMap.has('override_reason');
+        if (isOverriding) {
+          if (optionsMap.has('override_reason_key')) {
+            const reasonKeyOpt = optionsMap.get(
+              'override_reason_key',
+            ) as APIApplicationCommandInteractionDataStringOption;
+            edits.overrideReason = reasonKeyOpt.value;
+            editStr += 'Override reason set as `' + commonOverrideReasons[reasonKeyOpt.value] + '`\n';
+          } else {
+            const reasonOpt = optionsMap.get('override_reason') as APIApplicationCommandInteractionDataStringOption;
+            edits.overrideReason = '"' + reasonOpt.value + '"'; // Wrap in quotes to indicate custom reason
+            editStr += 'Override reason set as `' + reasonOpt.value + '`\n';
+          }
+        }
+
+        await Promise.all([
+          InteractionCallback(discordRest, interaction, {
             type: InteractionResponseType.ChannelMessageWithSource,
-            data: {
-              content:
-                'Only <@702740689846272002> can set memory for dates older than 3 days',
-              allowed_mentions: { users: ['702740689846272002'] },
-            },
+            data: { content: editStr },
+          }),
+          setDailyConfig(redis, date, edits, member.user.id),
+          pushAuthorName(redis, member.user.id, resovledName),
+        ]);
+
+        if (optionsMap.has('override_reason_key') || optionsMap.has('override_reason')) {
+          discordRest.post(Routes.webhook(context.env.DISCORD_CLIENT_ID, interaction.token), {
+            body: generateOverwriteMenu(date),
           });
         }
-        date = dateIn;
       }
     }
   } else if (interaction.type === InteractionType.MessageComponent) {
-    const { custom_id } = interaction.data;
+    const custom_id = interaction.data.custom_id;
     if (custom_id.startsWith('publish_')) {
       if (custom_id === 'publish_confirm') {
         const confirmingUser = await redis.get('publish_confirmation_user');
@@ -337,8 +549,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
             data: {
-              content:
-                'This publish request has to be confirmed by the original requester',
+              content: 'This publish request has to be confirmed by the original requester',
             },
           });
         }
@@ -378,6 +589,44 @@ export const onRequestPost: PagesFunction<Env> = async context => {
             components: [],
           },
         });
+      }
+    } else if (custom_id.startsWith('override_')) {
+      const { date, override, custom } = decodeOverrideCustomId(custom_id);
+      if (interaction.data.component_type === ComponentType.StringSelect) {
+        const value = interaction.data.values[0];
+        if (custom === 'select_group') {
+          override.group = parseInt(value);
+        } else if (custom === 'select_realm') {
+          override.realm = parseInt(value);
+        } else if (custom === 'select_map') {
+          override.map = value;
+        } else {
+          throw new Error('Unknown custom id');
+        }
+        return InteractionResponse({
+          type: InteractionResponseType.UpdateMessage,
+          data: generateOverwriteMenu(date, override),
+        });
+      } else if (interaction.data.component_type === ComponentType.Button) {
+        if (custom === 'cancel') {
+          return InteractionResponse({
+            type: InteractionResponseType.UpdateMessage,
+            data: { content: 'Override has been cancelled', embeds: [], components: [] },
+          });
+        } else if (custom === 'confirm') {
+          await setDailyConfig(redis, date, { override }, member.user.id);
+          const { embeds } = generateOverwriteMenu(date, override, true);
+          return InteractionResponse({
+            type: InteractionResponseType.UpdateMessage,
+            data: { content: 'Override has been confirmed', embeds, components: [] },
+          });
+        } else {
+          // The action has been excuted and encoded in the custom id, no need to do anything
+          return InteractionResponse({
+            type: InteractionResponseType.UpdateMessage,
+            data: generateOverwriteMenu(date, override),
+          });
+        }
       }
     }
   }
