@@ -156,13 +156,20 @@ function decodeOverrideCustomId(customId: string): {
   };
 }
 
+function formatGroup(group: number): string {
+  const { noShardWkDay, offset } = shardsInfo[group];
+  return `${group < 2 ? 'Black' : 'Red'}, First:${offset.hours}:${offset.minutes.toString().padStart(2, '0')}, NA:${noShardWkDay
+    .map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d % 7])
+    .join('&')}`;
+}
+
 function generateShardInfoEmbedFields(info: ShardInfo): APIEmbedField[] {
   return [
     { name: 'Shard?', value: info.hasShard ? 'Yes' : 'No', inline: true },
     { name: 'Color', value: info.isRed ? 'Red' : 'Black', inline: true },
-    { name: 'Group', value: info.group.toString(), inline: true },
+    { name: 'Group', value: formatGroup(info.group), inline: true },
     { name: 'Realm', value: stringsEn.skyRealms[realms[info.realm]], inline: true },
-    { name: 'Map', value: info.map, inline: true },
+    { name: 'Map', value: stringsEn.skyMaps[info.map as keyof typeof stringsEn.skyMaps], inline: true },
     {
       name: 'Occurrences',
       value: info.occurrences
@@ -209,9 +216,9 @@ function generateOverwriteMenu(
               .setCustomId(encodeOverrideCustomId(date, currentOverride, 'select_group'))
               .setPlaceholder('Select a group')
               .addOptions(
-                shardsInfo.map(({ noShardWkDay, offset: { hours, minutes } }, i) => ({
-                  default: i === (currentOverride?.group ?? info.group),
-                  label: `Start: ${hours}:${minutes.toString().padStart(2, '0')}, No Shard: ${noShardWkDay.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d % 7]).join('&')}`,
+                Array.from({ length: 5 }, (_, i) => ({
+                  default: i === overwrittenInfo.group,
+                  label: formatGroup(i),
                   value: i.toString(),
                 })),
               )
