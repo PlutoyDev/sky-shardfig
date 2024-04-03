@@ -210,6 +210,7 @@ function generateOverwriteMenu(
               .setPlaceholder('Select a group')
               .addOptions(
                 shardsInfo.map(({ noShardWkDay, offset: { hours, minutes } }, i) => ({
+                  default: i === (currentOverride?.group ?? info.group),
                   label: `Start: ${hours}:${minutes.toString().padStart(2, '0')}, No Shard: ${noShardWkDay.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d % 7]).join('&')}`,
                   value: i.toString(),
                 })),
