@@ -85,7 +85,7 @@ function formatField(fieldName: string, value: any) {
     if (v.startsWith('"')) {
       return '`' + v.substring(1, -1) + '`';
     } else if (v in commonOverrideReasons) {
-      return commonOverrideReasons[v];
+      return commonOverrideReasons[v as keyof typeof commonOverrideReasons];
     } else {
       return '`Unknown Reason Key: ' + v + '`';
     }
@@ -109,16 +109,17 @@ function InteractionCallback(
   return restClient.post(Routes.interactionCallback(interaction.id, interaction.token), { body: response });
 }
 
-function encodeOverrideCustomId(date: DateTime, override: Omit<Override, 'reason' | 'by'>, custom?: string): string {
+function encodeOverrideCustomId(date: DateTime, override?: Override, custom?: string): string {
   // Encode each property of the override into a string, null/undefined => -, boolean => 0/1, number => number, string => string
-  const keys = ['hasShard', 'isRed', 'group', 'realm', 'map'];
+  if (!override) override = {};
+  const keys = ['hasShard', 'isRed', 'group', 'realm', 'map'] as const;
   let customId = 'override_' + date.toFormat('yyMMdd');
   for (const key of keys) {
     const val = override[key];
     if (val === undefined || val === null) customId += '-';
-    else if (typeof val === 'boolean') customId += val ? '1' : '0';
-    else if (typeof val === 'number') customId += val.toString();
-    else customId += val; //map is the only string at the last
+    else if (key === 'hasShard' || key === 'isRed') customId += val ? '1' : '0';
+    else if (key === 'group' || key === 'realm') customId += val.toString();
+    else customId += val;
   }
   return custom ? customId + '_' + custom : customId;
 }
@@ -129,15 +130,15 @@ function decodeOverrideCustomId(customId: string): {
   custom?: string;
 } {
   // Decode each property of the override from a string, - => null, 0/1 => boolean, number => number, string => string
-  const keys = ['hasShard', 'isRed', 'group', 'realm', 'map'];
-  const override: Omit<Override, 'reason' | 'by'> = {};
+  const keys = ['hasShard', 'isRed', 'group', 'realm', 'map'] as const;
+  const override: Override = {};
   const [, dateStr, dataStr, ...custom] = customId.split('_');
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i];
     const val = dataStr[i];
     if (val === '-') continue;
-    else if (val === '0' || val === '1') override[key] = val === '1';
-    else if (!isNaN(parseInt(val))) override[key] = parseInt(val);
+    else if (key === 'hasShard' || key === 'isRed') override[key] = val === '1';
+    else if (key === 'group' || key === 'realm') override[key] = parseInt(val);
     else override[key] = dataStr.substring(i);
   }
   return {
@@ -323,7 +324,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
     });
   }
 
-  if (channel.id !== '1219629213238296676') {
+  if (channel?.id !== '1219629213238296676') {
     return InteractionResponse({
       type: InteractionResponseType.ChannelMessageWithSource,
       data: {
@@ -340,7 +341,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
     token: context.env.UPSTASH_REDIS_REST_TOKEN,
   });
 
-  const resovledName = member.nick ?? member.user.global_name;
+  const resovledName = member.nick ?? member.user.global_name ?? member.user.username;
   const isSuperUser = ['702740689846272002'].includes(member.user.id);
 
   // Handle Command
@@ -389,16 +390,21 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           const [, isoDate, fieldKey] = f.split(':');
           let dailyConfig: DailyConfig;
           if (fetchedDailies.has(isoDate)) {
-            dailyConfig = fetchedDailies.get(isoDate);
+            dailyConfig = fetchedDailies.get(isoDate)!;
           } else {
-            dailyConfig = await getParsedDailyConfig(redis, isoDate);
-            fetchedDailies.set(isoDate, dailyConfig);
+            const res = await getParsedDailyConfig(redis, isoDate);
+            if (res) {
+              dailyConfig = res;
+              fetchedDailies.set(isoDate, res);
+            } else {
+              continue;
+            }
           }
 
-          const dbVal = dailyConfig[fieldKey];
+          const dbVal = dailyConfig[fieldKey as keyof DailyConfig];
 
           let diff: string;
-          const liveVal = liveConfig?.dailiesMap?.[isoDate]?.[fieldKey];
+          const liveVal = liveConfig?.dailiesMap?.[isoDate]?.[fieldKey as keyof DailyConfig];
           if (liveVal) {
             if (liveVal !== dbVal) {
               continue;
@@ -515,7 +521,10 @@ export const onRequestPost: PagesFunction<Env> = async context => {
               'override_reason_key',
             ) as APIApplicationCommandInteractionDataStringOption;
             edits.overrideReason = reasonKeyOpt.value;
-            editStr += 'Override reason set as `' + commonOverrideReasons[reasonKeyOpt.value] + '`\n';
+            editStr +=
+              'Override reason set as `' +
+              commonOverrideReasons[reasonKeyOpt.value as keyof typeof commonOverrideReasons] +
+              '`\n';
           } else {
             const reasonOpt = optionsMap.get('override_reason') as APIApplicationCommandInteractionDataStringOption;
             edits.overrideReason = '"' + reasonOpt.value + '"'; // Wrap in quotes to indicate custom reason
