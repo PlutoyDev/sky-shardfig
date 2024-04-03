@@ -525,19 +525,23 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         }
 
         await Promise.all([
-          InteractionCallback(discordRest, interaction, {
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: editStr },
-          }),
           setDailyConfig(redis, date, edits, member.user.id),
           pushAuthorName(redis, member.user.id, resovledName),
+          // InteractionCallback(discordRest, interaction),
         ]);
 
         if (optionsMap.has('override_reason_key') || optionsMap.has('override_reason')) {
-          discordRest.post(Routes.webhook(context.env.DISCORD_CLIENT_ID, interaction.token), {
-            body: generateOverwriteMenu(date),
-          });
+          context.waitUntil(
+            discordRest.post(Routes.webhook(context.env.DISCORD_CLIENT_ID, interaction.token), {
+              body: generateOverwriteMenu(date),
+            }),
+          );
         }
+
+        return InteractionResponse({
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: { content: editStr },
+        });
       }
     }
   } else if (interaction.type === InteractionType.MessageComponent) {
