@@ -119,14 +119,18 @@ function encodeOverrideCustomId(date: DateTime, override?: Override, custom?: st
     if (val === undefined || val === null) customId += '-';
     else if (key === 'hasShard' || key === 'isRed') customId += val ? '1' : '0';
     else if (key === 'group' || key === 'realm') customId += val.toString();
-    else customId += val;
+    else if (key === 'map') {
+      // shortern map name
+      const [r, a] = (val as string).split('.');
+      customId += r[0] + a[0] + a[1];
+    }
   }
   return custom ? customId + '_' + custom : customId;
 }
 
 function decodeOverrideCustomId(customId: string): {
   date: DateTime;
-  override: Omit<Override, 'reason' | 'by'>;
+  override: Override;
   custom?: string;
 } {
   // Decode each property of the override from a string, - => null, 0/1 => boolean, number => number, string => string
@@ -139,7 +143,11 @@ function decodeOverrideCustomId(customId: string): {
     if (val === '-') continue;
     else if (key === 'hasShard' || key === 'isRed') override[key] = val === '1';
     else if (key === 'group' || key === 'realm') override[key] = parseInt(val);
-    else override[key] = dataStr.substring(i);
+    else if (key === 'map') {
+      // restore map name
+      const val = dataStr.slice(i);
+      override.map = Object.keys(stringsEn.skyMaps).find(k => RegExp(`^${val[0]}\\w*\\.${val.slice(1, 3)}`).test(k));
+    }
   }
   return {
     date: DateTime.fromFormat(dateStr, 'yyMMdd'),
@@ -350,6 +358,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
       // Slash Command
       const { name, options } = interaction.data;
       const optionsMap = new Map(options?.map(option => [option.name, option]));
+      console.log('Slash Command: ' + name, optionsMap);
 
       // Publish Command
       if (name === 'publish') {
@@ -554,6 +563,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
     }
   } else if (interaction.type === InteractionType.MessageComponent) {
     const custom_id = interaction.data.custom_id;
+    console.log('Message Component: ' + custom_id);
     if (custom_id.startsWith('publish_')) {
       if (custom_id === 'publish_confirm') {
         const confirmingUser = await redis.get('publish_confirmation_user');
@@ -604,6 +614,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
       }
     } else if (custom_id.startsWith('override_')) {
       const { date, override, custom } = decodeOverrideCustomId(custom_id);
+      console.log('Override Component', { date, override, custom });
       if (interaction.data.component_type === ComponentType.StringSelect) {
         const value = interaction.data.values[0];
         if (custom === 'select_group') {
@@ -613,7 +624,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         } else if (custom === 'select_map') {
           override.map = value;
         } else {
-          throw new Error('Unknown custom id');
+          throw new Error('Unknown custom id: ' + custom_id);
         }
         return InteractionResponse({
           type: InteractionResponseType.UpdateMessage,
@@ -639,6 +650,8 @@ export const onRequestPost: PagesFunction<Env> = async context => {
             data: generateOverwriteMenu(date, override),
           });
         }
+      } else {
+        throw new Error('Unknown component type: ' + interaction.data.component_type);
       }
     }
   }
