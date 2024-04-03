@@ -336,5 +336,5 @@ export async function getAuthorNames(redis: Redis) {
 export interface RemoteConfigResponse {
   dailiesMap: Record<string, DailyConfig>;
   authorNames: Record<string, string>;
-  global: GlobalConfig;
+  global?: GlobalConfig;
 }

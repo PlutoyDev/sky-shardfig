@@ -127,11 +127,13 @@ try {
     throw err;
   });
 
-  const remoteConfigOut = {
-    global,
+  const remoteConfigOut: RemoteConfigResponse = {
     authorNames,
     dailiesMap,
-  } satisfies RemoteConfigResponse;
+  } 
+  if (global) {
+    remoteConfigOut.global = global;
+  }
 
   log('Writing to file');
   await mkdir('dist').catch(() => {});
