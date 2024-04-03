@@ -283,12 +283,14 @@ export async function setDailyConfig(
   }
 
   if (overrideReason !== undefined) {
+    editedField.push('overrideReason');
     if (overrideReason) {
       configStringified.overrideReason = overrideReason;
     } else delField.push('overrideReason');
   }
 
   if (override !== undefined) {
+    editedField.push('override');
     if (override) {
       configStringified.override = JSON.stringify(config.override);
       configStringified.overrideBy = authorId;
