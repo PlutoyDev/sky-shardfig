@@ -113,7 +113,7 @@ function encodeOverrideCustomId(date: DateTime, override?: Override, custom?: st
   // Encode each property of the override into a string, null/undefined => -, boolean => 0/1, number => number, string => string
   if (!override) override = {};
   const keys = ['hasShard', 'isRed', 'group', 'realm', 'map'] as const;
-  let customId = 'override_' + date.toFormat('yyMMdd');
+  let customId = 'override_' + date.toFormat('yyMMdd') + '_';
   for (const key of keys) {
     const val = override[key];
     if (val === undefined || val === null) customId += '-';
