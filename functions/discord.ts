@@ -150,7 +150,7 @@ function decodeOverrideCustomId(customId: string): {
     }
   }
   return {
-    date: DateTime.fromFormat(dateStr, 'yyMMdd'),
+    date: DateTime.fromFormat(dateStr, 'yyMMdd', { zone: 'America/Los_Angeles' }),
     override,
     custom: custom.length > 0 ? custom.join('_') : undefined,
   };
@@ -488,7 +488,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
         if (dateInput) {
           // Verify Date
-          const dateIn = DateTime.fromISO(dateInput.value);
+          const dateIn = DateTime.fromISO(dateInput.value, { zone: 'America/Los_Angeles' });
           if (!dateIn.isValid) {
             return InteractionResponse({
               type: InteractionResponseType.ChannelMessageWithSource,
