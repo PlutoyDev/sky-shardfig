@@ -523,7 +523,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         }
 
         const edits: Parameters<typeof setDailyConfig>[2] = {};
-        let editStr = '';
+        let editStr = `For ${date.toISODate()}\n\n`;
 
         if (optionsMap.has('memory')) {
           const memOpt = optionsMap.get('memory') as APIApplicationCommandInteractionDataNumberOption;
