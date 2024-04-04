@@ -285,6 +285,12 @@ function generateOverwriteMenu(
               .setLabel('Confirm')
               .setStyle(ButtonStyle.Success)
               .toJSON(),
+            new ButtonBuilder()
+              .setCustomId(encodeOverrideCustomId(date, {}))
+              .setLabel('Reset')
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(currentOverride && Object.keys(currentOverride).length === 0)
+              .toJSON(),
           ],
         },
       ],
