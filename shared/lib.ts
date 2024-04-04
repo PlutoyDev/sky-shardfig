@@ -268,7 +268,7 @@ export async function setDailyConfig(
 
   if (memory !== undefined) {
     editedField.push('memory');
-    if (memory) {
+    if (memory !== null) {
       configStringified.memory = memory.toString();
       configStringified.memoryBy = authorId;
     } else delField.push('memory', 'memoryBy');
@@ -276,7 +276,7 @@ export async function setDailyConfig(
 
   if (variation !== undefined) {
     editedField.push('variation');
-    if (variation) {
+    if (variation !== null) {
       configStringified.variation = variation.toString();
       configStringified.variationBy = authorId;
     } else delField.push('variation', 'variationBy');
@@ -284,14 +284,14 @@ export async function setDailyConfig(
 
   if (overrideReason !== undefined) {
     editedField.push('overrideReason');
-    if (overrideReason) {
+    if (overrideReason !== null) {
       configStringified.overrideReason = overrideReason;
     } else delField.push('overrideReason');
   }
 
   if (override !== undefined) {
     editedField.push('override');
-    if (override) {
+    if (override !== null) {
       configStringified.override = JSON.stringify(config.override);
       configStringified.overrideBy = authorId;
     } else delField.push('override', 'overrideBy');
