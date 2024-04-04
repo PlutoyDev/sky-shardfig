@@ -48,7 +48,7 @@ interface Env {
   DISCORD_PUBLIC_KEY: string;
   DISCORD_BOT_TOKEN: string;
   CLOUDFLARE_DEPLOY_URL: string;
-  DISABLE_PUBLISH_DIFF: string | undefined;
+  DISABLE_PUBLISHED: string | undefined;
 }
 // Environment variables are injected at build time, so cannot destructured, cannot access with []
 
@@ -394,7 +394,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         let liveConfig: RemoteConfigResponse | null = null;
 
         // Fetch live config from cdn
-        if (context.env.DISABLE_PUBLISH_DIFF !== 'true') {
+        if (context.env.DISABLE_PUBLISHED !== 'true') {
           liveConfig = (await fetch('http://sky-shards.plutoy.top/minified').then(res =>
             res.status === 200 ? res.json() : null,
           )) as RemoteConfigResponse | null;
