@@ -36,7 +36,7 @@ try {
         option
           .setName('variation')
           .setDescription('Set the variation for the day')
-          .setChoices(Array.from({ length: 3 }, (_, i) => ({ name: `Variation ${i + 1}`, value: i + 1 }))),
+          .setChoices(Array.from({ length: 4 }, (_, i) => ({ name: `Variation ${i + 1}`, value: i + 1 }))),
       )
       .addStringOption(option =>
         option.setName('date').setDescription('Date of the config (YYYY-MM-DD, default today)'),
