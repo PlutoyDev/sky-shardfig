@@ -79,15 +79,11 @@ function valueToUint8Array(value: Uint8Array | ArrayBuffer | string, format?: st
 }
 
 function formatField(fieldName: string, value: any) {
-  if (fieldName === 'memory') {
-    if (value === -1) {
-      return '`Unset`';
-    }
+  if (value === undefined || value === null) {
+    return '`undefined`';
+  } else if (fieldName === 'memory') {
     return '`' + memories[value as number] + '`';
   } else if (fieldName === 'variation') {
-    if (value === -1) {
-      return '`Unset`';
-    }
     return '`Variation ' + ((value as number) + 1) + '`';
   } else if (fieldName === 'overrideReason') {
     const v = value as string;
@@ -446,7 +442,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
             diff = formatField(fieldKey, liveVal) + ' -> ' + formatField(fieldKey, dbVal);
           } else {
-            diff = '~~undefined~~' + ' -> ' + formatField(fieldKey, dbVal);
+            diff = '`undefined`' + ' -> ' + formatField(fieldKey, dbVal);
           }
 
           // changes.push([f, diff]);
