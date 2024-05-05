@@ -20,7 +20,7 @@ if (process.env.DISCORD_BOT_TOKEN === undefined) {
 try {
   // Setup the command in Discord in channel (1219629213238296676)
 
-  const commands: RESTPutAPIApplicationGuildCommandsJSONBody = [];
+  const commands = [];
 
   commands.push(
     new SlashCommandBuilder()
