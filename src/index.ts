@@ -61,30 +61,6 @@ log('Starting publish script');
 try {
   const dailiesMap: Record<string, DailyConfig> = {};
 
-  // Fetch config for dates that have been edited
-  const editedDates = await redis.smembers('edited_dates');
-  if (editedDates.length) {
-    log(`Fetched edited dates: ${editedDates.join(', ')}`);
-    await Promise.all([
-      redis.del('edited_dates'),
-      ...editedDates.map(async dateStr => {
-        const date = DateTime.fromISO(dateStr);
-        const config = await getParsedDailyConfig(redis, date);
-        if (config) {
-          dailiesMap[dateStr] = config;
-          log(`\tFetched ${dateStr} config`);
-        } else {
-          log(`\tFailed to fetch ${dateStr} config: empty or invalid`);
-        }
-      }),
-    ]).catch(err => {
-      console.error('Failed to fetch edited dates', stringifyError(err));
-      log('Failed to fetch edited dates');
-      log('Error: ' + stringifyError(err));
-      throw err;
-    });
-  }
-
   // Fetch previous daily config
   if (process.env.DISABLE_PUBLISHED !== 'true') {
     log('Fetching previous daily config');
@@ -105,6 +81,7 @@ try {
   } else {
     log('Fetching previous config are disabled');
   }
+
   log('Fetching global config and author names');
   const [global, authorNames] = await Promise.all([getGlobalShardConfig(redis), getAuthorNames(redis)]).catch(err => {
     console.error('Failed to fetch global config and/or author names', stringifyError(err));
@@ -112,6 +89,34 @@ try {
     log('Error: ' + stringifyError(err));
     throw err;
   });
+
+  const editedFields = await redis.smembers('edited_fields');
+  const editedDates = new Set<string>();
+  if (editedFields.length) {
+    await Promise.all(
+      editedFields.map(async field => {
+        const [dateStr] = field.split(':');
+        if (editedDates.has(dateStr)) return;
+        editedDates.add(dateStr);
+        const config = await getParsedDailyConfig(redis, dateStr);
+        if (config) {
+          dailiesMap[dateStr] = config;
+        } else {
+          log(`\tFailed to fetch ${dateStr} config: empty or invalid`);
+        }
+      }),
+    ).then(
+      () => {
+        redis.del('edited_fields');
+        log(`Fetched edited configs: ${Array.from(editedDates).join(', ')}`);
+      },
+      err => {
+        console.error('Failed to fetch edited fields', stringifyError(err));
+        log('Failed to fetch edited fields');
+        log('Error: ' + stringifyError(err));
+      },
+    );
+  }
 
   const remoteConfigOut: RemoteConfigResponse = {
     authorNames,
