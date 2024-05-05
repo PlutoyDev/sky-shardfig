@@ -218,7 +218,7 @@ export async function setDailyConfig(
     config.override === undefined &&
     !config.overrideReason
   ) {
-    throw new Error('No changes to set');
+    return;
   }
 
   // TODO: Add action log
