@@ -4,10 +4,9 @@ import { DateTime, Duration } from 'luxon';
 export const memories = ['Jellyfish', 'Crab', 'Manta', 'Krill', 'Whale', 'Elder'] as const;
 
 export const commonOverrideReasons = {
-  event_area: 'Disabled due to event occuring in the area',
-  bugged_shard: 'Bugged, Shard not working',
-  bugged_memory: "Can't access the memory",
-  tgc_altered: 'Altered by TGC',
+  event_area: 'Events are occuring in the area',
+  buggy_sky: 'Sky is buggy',
+  schedule_change: 'Schedule has changed',
 };
 
 export interface Override {
