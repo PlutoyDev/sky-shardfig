@@ -81,6 +81,8 @@ function valueToUint8Array(value: Uint8Array | ArrayBuffer | string, format?: st
 function formatField(fieldName: string, value: any) {
   if (fieldName === 'memory') {
     return '`' + memories[value as number] + '`';
+  } else if (fieldName === 'variation') {
+    return '`Variation ' + ((value as number) + 1) + '`';
   } else if (fieldName === 'overrideReason') {
     const v = value as string;
     if (v.startsWith('"')) {
