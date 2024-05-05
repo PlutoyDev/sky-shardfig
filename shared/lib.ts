@@ -185,23 +185,23 @@ export type DailyConfigFromRedis = Omit<DailyConfig, 'lastModified'> & {
   [key: string]: string | number;
 };
 
-export async function getParsedDailyConfig<Keys extends (keyof DailyConfig)[]>(
-  redis: Redis,
-  date: DateTime | string,
-  keys?: Keys,
-) {
+export async function getParsedDailyConfig(redis: Redis, date: DateTime | string) {
   if (typeof date !== 'string') date = date.toISODate() as string;
   const hashKey = `daily:${date}`;
 
-  const config = !keys
-    ? await redis.hgetall<DailyConfigFromRedis>(hashKey)
-    : await redis.hmget<DailyConfigFromRedis>(hashKey, ...keys);
+  const config = await redis.hgetall<DailyConfigFromRedis>(hashKey);
   if (!config) return undefined;
 
   const parsedConfig: DailyConfig = { ...config, lastModified: DateTime.fromISO(config.lastModified) };
+  // TODO: Remove after upstash fix deserialization #1048
+  Object.entries(parsedConfig).forEach(([key, value]) => {
+    if (!Number.isNaN(Number(value)) && Number.isSafeInteger(Number(value))) {
+      // @ts-ignore
+      parsedConfig[key] = Number(value);
+    }
+  });
 
-  if (!keys) return parsedConfig as DailyConfig;
-  return parsedConfig as Pick<DailyConfig, Keys[number]>;
+  return parsedConfig as DailyConfig;
 }
 
 export async function setDailyConfig(
@@ -263,7 +263,7 @@ export async function setDailyConfig(
 
   const hashKey = `daily:${isoDate}`;
   await Promise.all([
-    redis.hmset(hashKey, configStringified as Record<string, string>),
+    redis.hmset(hashKey, configStringified),
     redis.sadd('edited_fields', ...editedField.map(k => hashKey + ':' + k)),
     delField.length > 0 ? redis.hdel(hashKey, ...delField) : Promise.resolve(),
   ]);
