@@ -95,7 +95,7 @@ try {
   if (editedFields.length) {
     await Promise.all(
       editedFields.map(async field => {
-        const [dateStr] = field.split(':');
+        const dateStr = field.split(':')[1];
         if (editedDates.has(dateStr)) return;
         editedDates.add(dateStr);
         const config = await getParsedDailyConfig(redis, dateStr);
