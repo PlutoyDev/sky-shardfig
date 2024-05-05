@@ -406,7 +406,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
         // Fetch live config from cdn
         if (context.env.DISABLE_PUBLISHED !== 'true') {
-          liveConfig = (await fetch('http://sky-shards.plutoy.top/minified.json').then(res =>
+          liveConfig = (await fetch('https://sky-shardfig.plutoy.top/minified.json').then(res =>
             res.status === 200 ? res.json() : null,
           )) as RemoteConfigResponse | null;
         }
