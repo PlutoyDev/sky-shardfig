@@ -80,8 +80,14 @@ function valueToUint8Array(value: Uint8Array | ArrayBuffer | string, format?: st
 
 function formatField(fieldName: string, value: any) {
   if (fieldName === 'memory') {
+    if (value === -1) {
+      return '`Unset`';
+    }
     return '`' + memories[value as number] + '`';
   } else if (fieldName === 'variation') {
+    if (value === -1) {
+      return '`Unset`';
+    }
     return '`Variation ' + ((value as number) + 1) + '`';
   } else if (fieldName === 'overrideReason') {
     const v = value as string;
@@ -538,6 +544,9 @@ export const onRequestPost: PagesFunction<Env> = async context => {
             editStr += 'Memories can only be set on days with shards\n';
           } else if (!shardInfo.isRed) {
             editStr += 'Memories can only be set on Red days\n';
+          } else if (memOpt.value === -1) {
+            edits.memory = null;
+            editStr += 'Memory removed\n';
           } else {
             edits.memory = memOpt.value;
             editStr += 'Memory set as `' + formatField('memory', memOpt.value) + '`\n';
@@ -552,6 +561,9 @@ export const onRequestPost: PagesFunction<Env> = async context => {
             const maxVariants = numMapVarients[shardInfo.map as keyof typeof numMapVarients] ?? 1;
             if (variOpt.value > maxVariants) {
               editStr += `There is only ${maxVariants} variant(s) for ${stringsEn.skyMaps[shardInfo.map as keyof typeof stringsEn.skyMaps]}\n`;
+            } else if (variOpt.value === -1) {
+              edits.variation = null;
+              editStr += 'Variation removed\n';
             } else {
               edits.variation = variOpt.value;
               editStr += 'Variation set as ' + formatField('variation', variOpt.value) + '\n';
@@ -574,6 +586,16 @@ export const onRequestPost: PagesFunction<Env> = async context => {
             const reasonOpt = optionsMap.get('override_reason') as APIApplicationCommandInteractionDataStringOption;
             edits.overrideReason = '"' + reasonOpt.value + '"'; // Wrap in quotes to indicate custom reason
             editStr += 'Override reason set as `' + reasonOpt.value + '`\n';
+          }
+        }
+
+        if (optionsMap.has('clear_override')) {
+          edits.override = null;
+          edits.overrideReason = null;
+          editStr += 'Override cleared\n';
+          if (isOverriding) {
+            isOverriding = false;
+            editStr == '-- `clear_override` is used, override reason is ignored\n';
           }
         }
 

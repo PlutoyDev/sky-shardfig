@@ -30,13 +30,16 @@ try {
         option
           .setName('memory')
           .setDescription('Set the memory for the day')
-          .setChoices(...memories.map((m, i) => ({ name: m, value: i }))),
+          .setChoices(...memories.map((m, i) => ({ name: m, value: i })), { name: 'Remove', value: -1 }),
       )
       .addIntegerOption(option =>
         option
           .setName('variation')
           .setDescription('Set the variation for the day')
-          .setChoices(Array.from({ length: 4 }, (_, i) => ({ name: `Variation ${i + 1}`, value: i + 1 }))),
+          .setChoices(...Array.from({ length: 4 }, (_, i) => ({ name: `Variation ${i + 1}`, value: i + 1 })), {
+            name: 'Remove',
+            value: -1,
+          }),
       )
       .addStringOption(option =>
         option.setName('date').setDescription('Date of the config (YYYY-MM-DD, default today)'),
@@ -50,6 +53,7 @@ try {
       .addStringOption(option =>
         option.setName('override_reason').setDescription('The reason for the override (custom text)'),
       )
+      .addBooleanOption(option => option.setName('clear_override').setDescription('Clear the override'))
       .toJSON(),
   );
 
