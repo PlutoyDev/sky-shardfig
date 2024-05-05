@@ -180,62 +180,25 @@ export interface DailyConfig {
   lastModified?: DateTime;
 }
 
-export interface DailyConfigFromRedis {
-  memory?: string;
-  memoryBy?: string;
-  variation?: string;
-  variationBy?: string;
-  override?: string;
-  overrideBy?: string;
-  overrideReason?: string;
-  version?: string;
-  lastModified?: string;
-}
-
-export async function getDailyConfig<
-  Keys extends (keyof DailyConfig)[] = [
-    'memory',
-    'memoryBy',
-    'variation',
-    'variationBy',
-    'override',
-    'overrideBy',
-    'overrideReason',
-    'lastModified',
-  ],
->(
-  redis: Redis,
-  date: DateTime | string,
-  keys?: Keys,
-): Promise<Pick<DailyConfigFromRedis, Keys[number]> | DailyConfigFromRedis | undefined> {
-  if (typeof date !== 'string') date = date.toISODate() as string;
-  if (!date) return undefined;
-  const hashKey = `daily:${date}`;
-  if (!keys) {
-    return (await redis.hgetall(hashKey)) as DailyConfigFromRedis;
-  }
-
-  return (await redis.hmget(hashKey, ...keys)) as Pick<DailyConfigFromRedis, Keys[number]>;
-}
+export type DailyConfigFromRedis = Omit<DailyConfig, 'lastModified'> & {
+  lastModified: string;
+  [key: string]: string | number;
+};
 
 export async function getParsedDailyConfig<Keys extends (keyof DailyConfig)[]>(
   redis: Redis,
   date: DateTime | string,
   keys?: Keys,
 ) {
-  const config = (await getDailyConfig(redis, date, keys)) as DailyConfigFromRedis | undefined;
+  if (typeof date !== 'string') date = date.toISODate() as string;
+  const hashKey = `daily:${date}`;
+
+  const config = !keys
+    ? await redis.hgetall<DailyConfigFromRedis>(hashKey)
+    : await redis.hmget<DailyConfigFromRedis>(hashKey, ...keys);
   if (!config) return undefined;
 
-  const parsedConfig: DailyConfig = {};
-  if (config.memory) parsedConfig.memory = parseInt(config.memory);
-  if (config.memoryBy) parsedConfig.memoryBy = config.memoryBy;
-  if (config.variation) parsedConfig.variation = parseInt(config.variation);
-  if (config.variationBy) parsedConfig.variationBy = config.variationBy;
-  if (config.override) parsedConfig.override = JSON.parse(config.override);
-  if (config.overrideBy) parsedConfig.overrideBy = config.overrideBy;
-  if (config.overrideReason) parsedConfig.overrideReason = config.overrideReason;
-  if (config.version) parsedConfig.version = parseInt(config.version);
-  if (config.lastModified) parsedConfig.lastModified = DateTime.fromISO(config.lastModified);
+  const parsedConfig: DailyConfig = { ...config, lastModified: DateTime.fromISO(config.lastModified) };
 
   if (!keys) return parsedConfig as DailyConfig;
   return parsedConfig as Pick<DailyConfig, Keys[number]>;
@@ -263,12 +226,14 @@ export async function setDailyConfig(
   const { memory, variation, override, overrideReason } = config;
   const editedField: (keyof DailyConfig)[] = [];
   const delField: (keyof DailyConfig)[] = [];
-  const configStringified: DailyConfigFromRedis = {};
+  const configStringified: DailyConfigFromRedis = {
+    lastModified: DateTime.now().toISO(),
+  };
 
   if (memory !== undefined) {
     editedField.push('memory');
     if (memory !== null) {
-      configStringified.memory = memory.toString();
+      configStringified.memory = memory;
       configStringified.memoryBy = authorId;
     } else delField.push('memory', 'memoryBy');
   }
@@ -276,7 +241,7 @@ export async function setDailyConfig(
   if (variation !== undefined) {
     editedField.push('variation');
     if (variation !== null) {
-      configStringified.variation = variation.toString();
+      configStringified.variation = variation;
       configStringified.variationBy = authorId;
     } else delField.push('variation', 'variationBy');
   }
@@ -291,12 +256,10 @@ export async function setDailyConfig(
   if (override !== undefined) {
     editedField.push('override');
     if (override !== null) {
-      configStringified.override = JSON.stringify(config.override);
+      configStringified.override = config.override;
       configStringified.overrideBy = authorId;
     } else delField.push('override', 'overrideBy');
   }
-
-  configStringified.lastModified = DateTime.now().toISO();
 
   const hashKey = `daily:${isoDate}`;
   await Promise.all([
