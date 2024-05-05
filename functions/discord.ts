@@ -37,6 +37,7 @@ import {
   shardsInfo,
   stringsEn,
   realms,
+  numMapVarients,
 } from '../shared/lib.js';
 
 interface Env {
@@ -524,19 +525,36 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           });
         }
 
+        // TODO: Fetch Overrides and pass it to getShardInfo
+        const shardInfo = getShardInfo(date);
         const edits: Parameters<typeof setDailyConfig>[2] = {};
         let editStr = `For ${date.toISODate()}\n\n`;
 
         if (optionsMap.has('memory')) {
           const memOpt = optionsMap.get('memory') as APIApplicationCommandInteractionDataNumberOption;
-          edits.memory = memOpt.value;
-          editStr += 'Memory set as ' + formatField('memory', memOpt.value) + '\n';
+          if (!shardInfo.hasShard) {
+            editStr += 'Memories can only be set on days with shards\n';
+          } else if (!shardInfo.isRed) {
+            editStr += 'Memories can only be set on Red days\n';
+          } else {
+            edits.memory = memOpt.value;
+            editStr += 'Memory set as `' + formatField('memory', memOpt.value) + '`\n';
+          }
         }
 
         if (optionsMap.has('variation')) {
           const variOpt = optionsMap.get('variation') as APIApplicationCommandInteractionDataNumberOption;
-          edits.variation = variOpt.value;
-          editStr += 'Variation set as `' + variOpt.value + '`\n';
+          if (!shardInfo.hasShard) {
+            editStr += 'Variations can only be set on days with shards\n';
+          } else {
+            const maxVariants = numMapVarients[shardInfo.map as keyof typeof numMapVarients] ?? 1;
+            if (variOpt.value > maxVariants) {
+              editStr += `There is only ${maxVariants} variant(s) for ${stringsEn.skyMaps[shardInfo.map as keyof typeof stringsEn.skyMaps]}\n`;
+            } else {
+              edits.variation = variOpt.value;
+              editStr += 'Variation set as ' + formatField('variation', variOpt.value) + '\n';
+            }
+          }
         }
 
         let isOverriding = optionsMap.has('override_reason_key') || optionsMap.has('override_reason');
