@@ -91,6 +91,8 @@ function formatField(fieldName: string, value: any) {
     }
   } else if (typeof value === 'number') {
     return value.toString();
+  } else if (typeof value === 'object') {
+    return '`' + JSON.stringify(value) + '`';
   }
 }
 
@@ -429,7 +431,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           let diff: string;
           const liveVal = liveConfig?.dailiesMap?.[isoDate]?.[fieldKey as keyof DailyConfig];
           if (liveVal) {
-            if (liveVal !== dbVal) {
+            if (formatField(fieldKey, liveVal) === formatField(fieldKey, dbVal)) {
               continue;
             }
 
