@@ -33,7 +33,10 @@ try {
           .setChoices(...memories.map((m, i) => ({ name: m, value: i }))),
       )
       .addIntegerOption(option =>
-        option.setName('variation').setDescription('Set the variation for the day').setMaxValue(3).setMinValue(0),
+        option
+          .setName('variation')
+          .setDescription('Set the variation for the day')
+          .setChoices(Array.from({ length: 3 }, (_, i) => ({ name: `Variation ${i + 1}`, value: i + 1 }))),
       )
       .addStringOption(option =>
         option.setName('date').setDescription('Date of the config (YYYY-MM-DD, default today)'),
