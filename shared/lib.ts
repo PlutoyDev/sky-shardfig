@@ -193,13 +193,6 @@ export async function getParsedDailyConfig(redis: Redis, date: DateTime | string
   if (!config) return undefined;
 
   const parsedConfig: DailyConfig = { ...config, lastModified: DateTime.fromISO(config.lastModified) };
-  // TODO: Remove after upstash fix deserialization #1048
-  Object.entries(parsedConfig).forEach(([key, value]) => {
-    if (!Number.isNaN(Number(value)) && Number.isSafeInteger(Number(value))) {
-      // @ts-ignore
-      parsedConfig[key] = Number(value);
-    }
-  });
 
   return parsedConfig as DailyConfig;
 }
