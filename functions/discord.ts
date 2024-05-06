@@ -87,8 +87,8 @@ function formatField(fieldName: string, value: any) {
     return '`Variation ' + ((value as number) + 1) + '`';
   } else if (fieldName === 'overrideReason') {
     const v = value as string;
-    if (v.startsWith('"')) {
-      return '`' + v.substring(1, -1) + '`';
+    if (v.startsWith('!!!')) {
+      return '`' + v.slice(3) + '`';
     } else if (v in commonOverrideReasons) {
       return commonOverrideReasons[v as keyof typeof commonOverrideReasons];
     } else {
@@ -580,7 +580,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
               '`\n';
           } else {
             const reasonOpt = optionsMap.get('override_reason') as APIApplicationCommandInteractionDataStringOption;
-            edits.overrideReason = '"' + reasonOpt.value + '"'; // Wrap in quotes to indicate custom reason
+            edits.overrideReason = '!!!' + reasonOpt.value; // Prefix with !!! to indicate custom reason
             editStr += 'Override reason set as `' + reasonOpt.value + '`\n';
           }
         }
