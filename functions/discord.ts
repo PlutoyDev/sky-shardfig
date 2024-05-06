@@ -554,9 +554,11 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           if (!shardInfo.hasShard) {
             editStr += 'Variations can only be set on days with shards\n';
           } else {
-            const maxVariants = numMapVarients[shardInfo.map as keyof typeof numMapVarients] ?? 1;
-            if (variOpt.value > maxVariants) {
-              editStr += `There is only ${maxVariants} variant(s) for ${stringsEn.skyMaps[shardInfo.map as keyof typeof stringsEn.skyMaps]}\n`;
+            const maxVariants = numMapVarients[shardInfo.map as keyof typeof numMapVarients];
+            if (!maxVariants) {
+              editStr += `There is only 1 variant for ${stringsEn.skyMaps[shardInfo.map as keyof typeof stringsEn.skyMaps]}, no need to set\n`;
+            } else if (variOpt.value > maxVariants) {
+              editStr += `There is only ${maxVariants} variants for ${stringsEn.skyMaps[shardInfo.map as keyof typeof stringsEn.skyMaps]}\n`;
             } else if (variOpt.value === -1) {
               edits.variation = null;
               editStr += 'Variation removed\n';
