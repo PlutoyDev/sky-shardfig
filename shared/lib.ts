@@ -304,4 +304,6 @@ export interface RemoteConfigResponse {
   dailiesMap: Record<string, DailyConfig>;
   authorNames: Record<string, string>;
   global?: GlobalConfig;
+  // Randomly generated string for polling check
+  id: string;
 }

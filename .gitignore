@@ -3,6 +3,6 @@ node_modules
 compiled
 dist/prettified.json
 dist/minified.json
-dist/last_updated.txt
+dist/poll_id
 .env
 tsconfig.tsbuildinfo

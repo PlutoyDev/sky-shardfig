@@ -9,6 +9,7 @@ import {
 } from 'discord-api-types/v10';
 import { mkdir, writeFile } from 'fs/promises';
 import { DateTime } from 'luxon';
+import { nanoid } from 'nanoid';
 import {
   RemoteConfigResponse,
   getParsedDailyConfig,
@@ -121,6 +122,7 @@ try {
   const remoteConfigOut: RemoteConfigResponse = {
     authorNames,
     dailiesMap,
+    id: nanoid(7),
   };
   if (global) {
     remoteConfigOut.global = global;
@@ -131,7 +133,7 @@ try {
   await Promise.all([
     writeFile('dist/prettified.json', JSON.stringify(remoteConfigOut, null, 2)),
     writeFile('dist/minified.json', JSON.stringify(remoteConfigOut)),
-    writeFile('dist/last_updated.txt', Date.now().toString()),
+    writeFile('dist/poll_id', remoteConfigOut.id),
   ]);
 
   log('Published config');
