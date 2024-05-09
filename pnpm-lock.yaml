@@ -38,6 +38,9 @@ devDependencies:
   luxon:
     specifier: ^3.4.4
     version: 3.4.4
+  nanoid:
+    specifier: ^5.0.7
+    version: 5.0.7
   prettier:
     specifier: ^3.2.5
     version: 3.2.5
@@ -559,6 +562,12 @@ packages:
 
   /ms@2.1.2:
     resolution: {integrity: sha512-sGkPx+VjMtmA6MX27oA4FBFELFCZZ4S4XqeGOXCv68tT+jb3vk/RyaKWP0PTKyWtmLSM0b+adUTEvbs1PEaH2w==}
+    dev: true
+
+  /nanoid@5.0.7:
+    resolution: {integrity: sha512-oLxFY2gd2IqnjcYyOXD8XGCftpGtZP2AbHbOkthDkvRywH5ayNtPVy9YlOPcHckXzbLTCHpkb7FB+yuxKV13pQ==}
+    engines: {node: ^18 || >=20}
+    hasBin: true
     dev: true
 
   /picocolors@1.0.0:

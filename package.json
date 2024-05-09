@@ -25,6 +25,7 @@
     "concurrently": "^8.2.2",
     "discord-api-types": "^0.37.83",
     "luxon": "^3.4.4",
+    "nanoid": "^5.0.7",
     "prettier": "^3.2.5",
     "tweetnacl": "^1.0.3",
     "typescript": "^5.4.5"
