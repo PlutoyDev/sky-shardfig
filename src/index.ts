@@ -133,10 +133,11 @@ try {
   await Promise.all([
     writeFile('dist/prettified.json', JSON.stringify(remoteConfigOut, null, 2)),
     writeFile('dist/minified.json', JSON.stringify(remoteConfigOut)),
-    writeFile('dist/poll_id', remoteConfigOut.id),
+    writeFile('dist/poll_id.txt', remoteConfigOut.id),
   ]);
 
   log('Published config');
+  log('Config ID: ' + remoteConfigOut.id);
 
   //Respond to the interaction if it exists
   await redis.hgetall<Record<'id' | 'token', string>>('publish_callback').then(async publishInteraction => {

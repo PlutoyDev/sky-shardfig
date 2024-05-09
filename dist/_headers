@@ -5,3 +5,8 @@
 /prettified.json
   Access-Control-Allow-Origin: *
   Access-Control-Allow-Methods: GET
+
+/poll_id
+  Access-Control-Allow-Origin: *
+  Access-Control-Allow-Methods: GET
+  
