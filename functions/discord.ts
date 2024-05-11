@@ -510,11 +510,11 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           }
 
           // Cannot be 3 day in the past
-          if (dateIn < DateTime.now().minus({ days: 3 }) && member.user.id !== '702740689846272002') {
+          if (dateIn < DateTime.now().minus({ days: 3 }) && !isSuperUser) {
             return InteractionResponse({
               type: InteractionResponseType.ChannelMessageWithSource,
               data: {
-                content: 'Only <@702740689846272002> can set memory for dates older than 3 days',
+                content: 'Only specified user can configure for dates older than 3 days',
                 flags: MessageFlags.SuppressNotifications,
               },
             });
