@@ -1,8 +1,9 @@
 node_modules
 
 compiled
-dist/prettified.json
-dist/minified.json
-dist/poll_id.txt
+dist/*
+!dist/_headers
+!dist/_routes.json
+!dist/index.html
 .env
 tsconfig.tsbuildinfo
