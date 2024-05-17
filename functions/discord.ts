@@ -2,6 +2,7 @@ import { ButtonBuilder, EmbedBuilder, StringSelectMenuBuilder } from '@discordjs
 import { REST } from '@discordjs/rest';
 import { Redis } from '@upstash/redis/cloudflare';
 import {
+  APIApplicationCommandInteractionDataBooleanOption,
   APIApplicationCommandInteractionDataNumberOption,
   APIApplicationCommandInteractionDataStringOption,
   APIEmbedField,
@@ -10,7 +11,6 @@ import {
   APIInteractionResponseCallbackData,
   ButtonStyle,
   ComponentType,
-  RESTPostAPIWebhookWithTokenJSONBody,
 } from 'discord-api-types/v10';
 import {
   InteractionType,
@@ -22,14 +22,10 @@ import {
 import { DateTime } from 'luxon';
 import nacl from 'tweetnacl';
 import {
-  DailyConfig,
-  RemoteConfigResponse,
-  getAuthorNames,
   getParsedDailyConfig,
   memories,
   commonOverrideReasons,
   pushAuthorName,
-  getGlobalShardConfig,
   setDailyConfig,
   getShardInfo,
   Override,
@@ -371,6 +367,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
   });
 
   const resovledName = member.nick ?? member.user.global_name ?? member.user.username;
+  const isPlutoy = member.user.id === '702740689846272002';
   const isSuperUser = ['702740689846272002'].includes(member.user.id);
 
   // Handle Command
@@ -383,108 +380,102 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
       // Publish Command
       if (name === 'publish') {
-        const [editedFields, authorNames] = await Promise.all([redis.smembers('edited_fields'), getAuthorNames(redis)]);
-        if (editedFields.length === 0) {
+        if (optionsMap.has('purge')) {
+          if (!isSuperUser) {
+            return InteractionResponse({
+              type: InteractionResponseType.ChannelMessageWithSource,
+              data: {
+                content: 'Only specified user can purge',
+                flags: MessageFlags.SuppressNotifications,
+              },
+            });
+          }
+
+          const purge = optionsMap.get('purge') as APIApplicationCommandInteractionDataBooleanOption;
+          if (purge.value) {
+            await redis.set('publish_purge', 'true', { ex: 600 });
+            return InteractionResponse({
+              type: InteractionResponseType.ChannelMessageWithSource,
+              data: {
+                allowed_mentions: { users: ['702740689846272002'] },
+                content:
+                  (!isPlutoy ? '<@702740689846272002> Purge notification,\n\n' : '') +
+                  'Are you sure you want to purge the published config?',
+                components: [
+                  {
+                    type: ComponentType.ActionRow,
+                    components: [
+                      new ButtonBuilder()
+                        .setCustomId('publish_confirm')
+                        .setLabel('Confirm')
+                        .setStyle(ButtonStyle.Success)
+                        .toJSON(),
+                      new ButtonBuilder()
+                        .setCustomId('publish_cancel')
+                        .setLabel('Cancel')
+                        .setStyle(ButtonStyle.Danger)
+                        .toJSON(),
+                    ],
+                  },
+                ],
+              },
+            });
+          }
+        }
+        const last3IsoDates = Array.from({ length: 3 }, (_, i) => DateTime.now().minus({ days: i }).toISODate());
+        const [dailyConfigs, prevConfirmingUser] = await Promise.all([
+          //!: Add defer if needed
+          Promise.all(last3IsoDates.map(date => getParsedDailyConfig(redis, date))),
+          redis.set('publish_confirmation_user', member.user.id, { get: true, ex: 600 }),
+          //TODO: Add QStash Delay
+        ]);
+
+        if (dailyConfigs.every(c => !c)) {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'No changes to publish' },
+            data: { content: 'No configurations to publish' },
           });
         }
 
-        // If there are changes, defer the response
-        discordRest.post(Routes.interactionCallback(interaction.id, interaction.token), {
-          body: InteractionResponse({
-            type: InteractionResponseType.DeferredMessageUpdate,
-          }),
-        });
+        let msg = '';
 
-        let liveConfig: RemoteConfigResponse | null = null;
-
-        // Fetch live config from cdn
-        if (context.env.DISABLE_PUBLISHED !== 'true') {
-          liveConfig = (await fetch('https://sky-shardfig.plutoy.top/minified.json').then(res =>
-            res.status === 200 ? res.json() : null,
-          )) as RemoteConfigResponse | null;
+        if (prevConfirmingUser) {
+          msg += `Previous publish request by <@${prevConfirmingUser}> has been cancelled\n\n`;
         }
 
-        let hasGlobalChanged = false;
-        const fetchedDailies = new Map<string, DailyConfig>();
-        let changes = '';
+        msg += 'The following are the current configurations:\n\n';
 
-        for (const f of editedFields) {
-          if (f === 'global') {
-            hasGlobalChanged = true;
-            continue;
-          }
-
-          const [, isoDate, fieldKey] = f.split(':');
-          let dailyConfig: DailyConfig;
-          if (fetchedDailies.has(isoDate)) {
-            dailyConfig = fetchedDailies.get(isoDate)!;
-          } else {
-            const res = await getParsedDailyConfig(redis, isoDate);
-            if (res) {
-              dailyConfig = res;
-              fetchedDailies.set(isoDate, res);
-            } else {
-              continue;
-            }
-          }
-
-          const dbVal = dailyConfig[fieldKey as keyof DailyConfig];
-
-          let diff: string;
-          const liveVal = liveConfig?.dailiesMap?.[isoDate]?.[fieldKey as keyof DailyConfig];
-          if (liveVal) {
-            if (formatField(fieldKey, liveVal) === formatField(fieldKey, dbVal)) {
-              continue;
-            }
-
-            diff = formatField(fieldKey, liveVal) + ' -> ' + formatField(fieldKey, dbVal);
-          } else {
-            diff = '`undefined`' + ' -> ' + formatField(fieldKey, dbVal);
-          }
-
-          // changes.push([f, diff]);
-          changes += `\n**${f}**: ${diff}`;
+        for (const c of dailyConfigs) {
+          if (!c) continue;
+          msg += `For **${c.date}**\n`;
+          if (c.memory) msg += 'Memory: ' + formatField('memory', c.memory) + '\n';
+          if (c.variation) msg += 'Variation: ' + formatField('variation', c.variation) + '\n';
+          if (c.overrideReason) msg += 'Override Reason: ' + formatField('overrideReason', c.overrideReason) + '\n';
+          if (c.override) msg += 'Override: ' + formatField('override', c.override) + '\n';
+          msg += '\n';
         }
 
-        if (hasGlobalChanged) {
-          changes =
-            `\n**Global**: \n\`\`\`json\n${JSON.stringify(await getGlobalShardConfig(redis), null, 2)}\n\`\`\`` +
-            changes;
-        }
-
-        const prevConfirmingUser = await redis.set('publish_confirmation_user', member.user.id, { get: true });
+        msg += '\nDo you want to publish these configurations?';
 
         return InteractionResponse({
           type: InteractionResponseType.ChannelMessageWithSource,
           data: {
-            embeds: [
-              {
-                title: `Confirm Publish for the following changes`,
-                description:
-                  (prevConfirmingUser ? `Request by <@${prevConfirmingUser}> has been replaced\n\n` : '') +
-                  'Please confirm the following changes: ' +
-                  changes,
-              },
-            ],
+            allowed_mentions: prevConfirmingUser ? { users: [prevConfirmingUser] } : undefined,
+            content: msg,
             components: [
               {
-                type: 1,
+                type: ComponentType.ActionRow,
                 components: [
-                  {
-                    type: 2,
-                    style: 1,
-                    label: 'Confirm',
-                    custom_id: 'publish_confirm',
-                  },
-                  {
-                    type: 2,
-                    style: 4,
-                    label: 'Cancel',
-                    custom_id: 'publish_cancel',
-                  },
+                  new ButtonBuilder()
+                    .setCustomId('publish_confirm')
+                    .setLabel('Confirm')
+                    .setStyle(ButtonStyle.Success)
+                    .toJSON(),
+                  new ButtonBuilder()
+                    .setCustomId('publish_cancel')
+                    .setLabel('Cancel')
+                    .setStyle(ButtonStyle.Danger)
+                    .toJSON(),
                 ],
               },
             ],
@@ -623,6 +614,15 @@ export const onRequestPost: PagesFunction<Env> = async context => {
     if (custom_id.startsWith('publish_')) {
       if (custom_id === 'publish_confirm') {
         const confirmingUser = await redis.get('publish_confirmation_user');
+        if (confirmingUser === null) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: {
+              content: 'This publish request has expired',
+            },
+          });
+        }
+
         if (confirmingUser !== member.user.id) {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,

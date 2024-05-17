@@ -193,7 +193,6 @@ export async function setDailyConfig(
   date: DateTime,
   config: Pick<DailyConfig, 'memory' | 'variation' | 'override' | 'overrideReason'>,
   authorId: string,
-  prevValues: DailyConfig | null,
 ) {
   const isoDate = date.toISODate();
   if (!isoDate) throw new Error('Invalid date');
