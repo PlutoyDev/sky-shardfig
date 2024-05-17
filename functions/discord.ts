@@ -34,6 +34,8 @@ import {
   stringsEn,
   realms,
   numMapVarients,
+  setWarning,
+  warnings,
 } from '../shared/lib.js';
 
 interface Env {
@@ -606,6 +608,41 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           type: InteractionResponseType.ChannelMessageWithSource,
           data: { content: editStr },
         });
+      }
+
+      if (name === 'set_warnings') {
+        if (!isPlutoy) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: {
+              content: 'Only Plutoy can set warnings',
+              flags: MessageFlags.SuppressNotifications,
+            },
+          });
+        }
+
+        const typeOpt = optionsMap.get('type') as APIApplicationCommandInteractionDataStringOption;
+        const type = typeOpt.value as keyof typeof warnings | 'remove';
+        const warning = type === 'remove' ? null : type;
+        await setWarning(redis, warning);
+
+        context.waitUntil(
+          fetch(context.env.CLOUDFLARE_DEPLOY_URL, {
+            method: 'POST',
+          }),
+        );
+
+        if (type === 'remove') {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: { content: 'Warning removed' },
+          });
+        } else {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: { content: 'Warning set as `' + warnings[type] + '`' },
+          });
+        }
       }
     }
   } else if (interaction.type === InteractionType.MessageComponent) {
