@@ -168,7 +168,7 @@ export function getShardInfo(date: DateTime, override?: Override) {
 
 export type ShardInfo = ReturnType<typeof getShardInfo>;
 
-export interface DailyConfig {
+export interface DailyConfig extends Record<string, unknown> {
   memory?: number | null;
   memoryBy?: string | null;
   variation?: number | null;
@@ -176,118 +176,63 @@ export interface DailyConfig {
   override?: Override | null;
   overrideBy?: string | null;
   overrideReason?: string | null;
-  version?: number;
-  lastModified?: DateTime;
 }
-
-export type DailyConfigFromRedis = Omit<DailyConfig, 'lastModified'> & {
-  lastModified: string;
-  [key: string]: string | number;
-};
 
 export async function getParsedDailyConfig(redis: Redis, date: DateTime | string) {
   if (typeof date !== 'string') date = date.toISODate() as string;
   const hashKey = `daily:${date}`;
 
-  const config = await redis.hgetall<DailyConfigFromRedis>(hashKey);
+  const config = await redis.hgetall<DailyConfig>(hashKey);
   if (!config) return undefined;
 
-  const parsedConfig: DailyConfig = { ...config, lastModified: DateTime.fromISO(config.lastModified) };
-
-  return parsedConfig as DailyConfig;
+  return config;
 }
 
 export async function setDailyConfig(
   redis: Redis,
   date: DateTime,
-  config: Omit<DailyConfig, 'lastModified' | 'version' | 'memoryBy' | 'variationBy' | 'overrideBy'>,
+  config: Pick<DailyConfig, 'memory' | 'variation' | 'override' | 'overrideReason'>,
   authorId: string,
+  prevValues: DailyConfig | null,
 ) {
   const isoDate = date.toISODate();
   if (!isoDate) throw new Error('Invalid date');
-  if (
-    config.memory === undefined &&
-    config.variation === undefined &&
-    config.override === undefined &&
-    !config.overrideReason
-  ) {
-    return;
-  }
-
-  // TODO: Add action log
+  const hashKey = `daily:${isoDate}`;
 
   const { memory, variation, override, overrideReason } = config;
-  const editedField: (keyof DailyConfig)[] = [];
-  const delField: (keyof DailyConfig)[] = [];
-  const configStringified: DailyConfigFromRedis = {
-    lastModified: DateTime.now().toISO(),
-  };
 
-  if (memory !== undefined) {
-    editedField.push('memory');
-    if (memory !== null) {
-      configStringified.memory = memory;
-      configStringified.memoryBy = authorId;
-    } else delField.push('memory', 'memoryBy');
+  const configSet: DailyConfig = { ...config };
+
+  const deletingField: string[] = [];
+
+  if (memory === null) {
+    deletingField.push('memory', 'memoryBy');
+    delete config.memory;
+  } else if (memory !== undefined) {
+    configSet.memoryBy = authorId;
   }
 
-  if (variation !== undefined) {
-    editedField.push('variation');
-    if (variation !== null) {
-      configStringified.variation = variation;
-      configStringified.variationBy = authorId;
-    } else delField.push('variation', 'variationBy');
+  if (variation === null) {
+    deletingField.push('variation', 'variationBy');
+    delete config.variation;
+  } else if (variation !== undefined) {
+    configSet.variationBy = authorId;
   }
 
-  if (overrideReason !== undefined) {
-    editedField.push('overrideReason');
-    if (overrideReason !== null) {
-      configStringified.overrideReason = overrideReason;
-    } else delField.push('overrideReason');
+  if (override === null) {
+    deletingField.push('override', 'overrideBy', 'overrideBy');
+    delete config.override;
+    delete config.overrideReason;
+  } else if (overrideReason !== undefined) {
+    configSet.overrideBy = authorId;
   }
 
-  if (override !== undefined) {
-    editedField.push('override');
-    if (override !== null) {
-      configStringified.override = config.override;
-      configStringified.overrideBy = authorId;
-    } else delField.push('override', 'overrideBy');
-  }
+  const editedConfigKeys = Object.keys(configSet);
 
-  const hashKey = `daily:${isoDate}`;
-  await Promise.all([
-    redis.hmset(hashKey, configStringified),
-    redis.sadd('edited_fields', ...editedField.map(k => hashKey + ':' + k)),
-    delField.length > 0 ? redis.hdel(hashKey, ...delField) : Promise.resolve(),
+  return Promise.all([
+    editedConfigKeys.length > 1 ? redis.hset(hashKey, configSet) : Promise.resolve(),
+    deletingField.length > 1 ? redis.hdel(hashKey, ...deletingField) : Promise.resolve(),
   ]);
-
-  await redis.hincrby(`daily:${isoDate}`, 'version', 1);
-}
-
-export interface GlobalConfig {
-  // This controls the global state of the application
-  bugged?: boolean;
-  buggedReason?: string;
-}
-
-export async function getGlobalShardConfig(redis: Redis): Promise<GlobalConfig | undefined> {
-  const config = await redis.hgetall<Record<keyof GlobalConfig, string>>('global');
-  if (!config) return undefined;
-  if (config.bugged && config.bugged === 'true') {
-    return { bugged: true, buggedReason: config.buggedReason };
-  } else return undefined;
-}
-
-export async function setGlobalShardConfig(redis: Redis, data: GlobalConfig) {
-  if (data.bugged) {
-    if (!data.buggedReason) throw new Error('Missing reason for setting bugged state');
-    await redis.hset('global', {
-      bugged: true,
-      buggedReason: data.buggedReason,
-    });
-  } else redis.del('global');
-
-  await redis.sadd('edited_fields', 'global');
 }
 
 export async function pushAuthorName(redis: Redis, authorId: string, authorName: string) {
@@ -300,10 +245,38 @@ export async function getAuthorNames(redis: Redis) {
   return authorNames as Record<string, string>;
 }
 
+export const warnings = {
+  bugged: 'Shard is bugged',
+  changed: 'This schedule of shard has changed',
+  disabled: 'This shard has been disabled',
+} as const;
+
+type Warning = keyof typeof warnings;
+
+export async function getWarning(redis: Redis) {
+  return (redis.get('warnings') ?? null) as unknown as Warning | null;
+}
+
+export async function setWarning(redis: Redis, warning: Warning | null) {
+  if (warning === null) {
+    await redis.del('warnings');
+  } else {
+    await redis.set('warnings', warning);
+  }
+}
+
 export interface RemoteConfigResponse {
   dailiesMap: Record<string, DailyConfig>;
   authorNames: Record<string, string>;
-  global?: GlobalConfig;
+  warnings?: 'bugged' | 'changed' | 'disabled';
   // Randomly generated string for polling check
   id: string;
+}
+
+export async function getResponse(redis: Redis) {
+  return redis.get<RemoteConfigResponse>('outCache');
+}
+
+export async function sendResponse(redis: Redis, res: string) {
+  return redis.set('outCache', res);
 }
