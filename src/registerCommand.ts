@@ -6,7 +6,7 @@ import {
   RESTPutAPIApplicationGuildCommandsResult,
   Routes,
 } from 'discord-api-types/v10';
-import { commonOverrideReasons, memories } from '../shared/lib.js';
+import { commonOverrideReasons, memories, warnings } from '../shared/lib.js';
 
 if (process.env.DISCORD_CLIENT_ID === undefined) {
   throw new Error('Missing required environment variable: DISCORD_CLIENT_ID');
@@ -57,7 +57,20 @@ try {
       .toJSON(),
   );
 
-  // TODO: Add command for global config
+  commands.push(
+    new SlashCommandBuilder()
+      .setName('set_warnings')
+      .setDescription('For Plutoy to set the pop up warning')
+      .addStringOption(option =>
+        option
+          .setName('type')
+          .setDescription('type of warning pop up')
+          .addChoices(...Object.entries(warnings).map(([value, name]) => ({ name, value })), {
+            name: 'Remove',
+            value: 'remove',
+          }),
+      ),
+  );
 
   commands.push(
     new SlashCommandBuilder().setName('publish').setDescription('Publish the config to Sky-Shards').toJSON(),
