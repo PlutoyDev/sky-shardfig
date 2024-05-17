@@ -14,8 +14,10 @@ import {
   RemoteConfigResponse,
   getParsedDailyConfig,
   DailyConfig,
-  getGlobalShardConfig,
   getAuthorNames,
+  getWarning,
+  getResponse,
+  sendResponse,
 } from '../shared/lib.js';
 
 const envRequired = [
@@ -59,64 +61,58 @@ const stringifyError = (err: unknown) =>
 
 log('Starting publish script');
 
-try {
-  const dailiesMap: Record<string, DailyConfig> = {};
+mkdir('dist', { recursive: true })
 
-  // Fetch previous daily config
-  if (process.env.DISABLE_PUBLISHED !== 'true') {
-    log('Fetching previous daily config');
-    await axios
-      .get<RemoteConfigResponse>('https://sky-shardfig.plutoy.top/minified.json', {
-        validateStatus: status => status === 200,
-      })
-      .then(async res => {
-        const prevRemoteConfig = res.data;
-        log('Fetched previous daily config: ' + Object.keys(prevRemoteConfig.dailiesMap));
-        Object.assign(dailiesMap, prevRemoteConfig.dailiesMap);
-      })
-      .catch(err => {
-        console.error('Failed to fetch previous daily config', stringifyError(err));
-        log('Failed to fetch previous daily config');
-        log('Error: ' + stringifyError(err));
-      });
+try {
+  const last3Days = Array.from({ length: 3 }, (_, i) => DateTime.now().minus({ days: i }).toISODate());
+  let fetchDates: string[];
+  const purge = (await redis.get('publish_purge')) === 'true';
+  if (purge) {
+    // Refetch all dates
+    const keys = new Set<string>();
+    let cursor = 0;
+    log(`Scanning keys`);
+    do {
+      const [next, ks] = await redis.scan(cursor, { match: 'daily:*', count: 1000 });
+      cursor = next;
+      ks.forEach(k => keys.add(k));
+    } while (cursor !== 0);
+
+    log(`Scanned ${keys.size} keys`);
+    fetchDates = [];
+    for (const key of keys) {
+      const date = key.substring(6);
+      fetchDates.push(date);
+    }
   } else {
-    log('Fetching previous config are disabled');
+    fetchDates = last3Days;
   }
 
-  log('Fetching global config and author names');
-  const [global, authorNames] = await Promise.all([getGlobalShardConfig(redis), getAuthorNames(redis)]).catch(err => {
-    console.error('Failed to fetch global config and/or author names', stringifyError(err));
-    log('Failed to fetch global config and/or author names');
-    log('Error: ' + stringifyError(err));
+  log('Fetching redis data');
+  const [dailies, prevResponse, authorNames, warning, callback] = await Promise.all([
+    Promise.all(fetchDates.map(date => getParsedDailyConfig(redis, date))),
+    !purge ? getResponse(redis) : null,
+    getAuthorNames(redis),
+    getWarning(redis),
+    redis.hgetall<Record<'id' | 'token', string>>('publish_callback'),
+  ]).catch(err => {
+    errorLog('Failed to fetch redis data', err);
     throw err;
   });
 
-  const editedFields = await redis.smembers('edited_fields');
-  const editedDates = new Set<string>();
-  if (editedFields.length) {
-    await Promise.all(
-      editedFields.map(async field => {
-        const dateStr = field.split(':')[1];
-        if (editedDates.has(dateStr)) return;
-        editedDates.add(dateStr);
-        const config = await getParsedDailyConfig(redis, dateStr);
-        if (config) {
-          dailiesMap[dateStr] = config;
-        } else {
-          log(`\tFailed to fetch ${dateStr} config: empty or invalid`);
-        }
-      }),
-    ).then(
-      () => {
-        redis.del('edited_fields');
-        log(`Fetched edited configs: ${Array.from(editedDates).join(', ')}`);
-      },
-      err => {
-        console.error('Failed to fetch edited fields', stringifyError(err));
-        log('Failed to fetch edited fields');
-        log('Error: ' + stringifyError(err));
-      },
-    );
+  log('Creating response object');
+
+  const dailiesMap: Record<string, DailyConfig> = {};
+  fetchDates.forEach((date, i) => {
+    const daily = dailies[i];
+    if (daily) {
+      dailiesMap[date] = daily;
+    }
+  });
+
+  if (prevResponse) {
+    log('Merging previous response');
+    Object.assign(dailiesMap, prevResponse.dailiesMap);
   }
 
   const remoteConfigOut: RemoteConfigResponse = {
@@ -124,37 +120,53 @@ try {
     dailiesMap,
     id: nanoid(7),
   };
-  if (global) {
-    remoteConfigOut.global = global;
+
+  if (warning) {
+    log('Setting warning');
+    remoteConfigOut.warnings = warning;
   }
 
+  // create a smaller version of the response with only the last 3 days
+  const last3DaysMap: Record<string, DailyConfig> = {};
+  last3Days.forEach(date => {
+    const daily = dailiesMap[date];
+    if (daily) {
+      last3DaysMap[date] = daily;
+    }
+  });
+
+  const last3DaysResponse: RemoteConfigResponse = {
+    authorNames,
+    dailiesMap: last3DaysMap,
+    id: remoteConfigOut.id,
+  };
+
   log('Writing to file');
-  await mkdir('dist').catch(() => {});
+  const fullJson = JSON.stringify(remoteConfigOut);
   await Promise.all([
-    writeFile('dist/prettified.json', JSON.stringify(remoteConfigOut, null, 2)),
-    writeFile('dist/minified.json', JSON.stringify(remoteConfigOut)),
+    writeFile('dist/all_pretty.json', JSON.stringify(remoteConfigOut, null, 2)),
+    writeFile('dist/all.json', fullJson),
+    writeFile('dist/minified.json', JSON.stringify(last3DaysResponse)),
     writeFile('dist/poll_id.txt', remoteConfigOut.id),
+    sendResponse(redis, fullJson),
   ]);
 
-  log('Published config');
-  log('Config ID: ' + remoteConfigOut.id);
+  if (callback) {
+    log('Responding to interaction');
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
 
-  //Respond to the interaction if it exists
-  await redis.hgetall<Record<'id' | 'token', string>>('publish_callback').then(async publishInteraction => {
-    if (publishInteraction?.id && publishInteraction?.token) {
-      log('Responding to interaction');
-      const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
-
-      await rest.patch(Routes.webhookMessage(process.env.DISCORD_CLIENT_ID, publishInteraction.token, '@original'), {
+    await Promise.all([
+      rest.patch(Routes.webhookMessage(process.env.DISCORD_CLIENT_ID, callback.token, '@original'), {
         body: {
           content: 'Config has been published to Sky-Shards\nThank you for your contribution!',
         } satisfies RESTPatchAPIInteractionOriginalResponseJSONBody,
-      });
+      }),
+      redis.del('publish_callback'),
+    ]);
+  }
 
-      await redis.del('publish_callback');
-      log('Responded to interaction');
-    }
-  });
+  log('Published config');
+  log('Config ID: ' + remoteConfigOut.id);
 
   // Send the logs to the webhook
   await axios.post(process.env.DISCORD_WEBHOOK_URL, {
@@ -168,4 +180,14 @@ try {
     content: '<@702740689846272002>, Configuration publish failed\n\n```' + logs.join('\n') + '```',
     allowed_mentions: { users: ['702740689846272002'] },
   } satisfies RESTPostAPIWebhookWithTokenJSONBody);
+
+  const callback = await redis.hgetall<Record<'id' | 'token', string>>('publish_callback');
+  if (callback) {
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
+    await rest.patch(Routes.webhookMessage(process.env.DISCORD_CLIENT_ID, callback.token, '@original'), {
+      body: {
+        content: '<:MothShocked:855634907867250749> Oops!!\n Failed to publish config\nPlutoy has been notified and will look into it.',
+      } satisfies RESTPatchAPIInteractionOriginalResponseJSONBody,
+    });
+  }
 }
