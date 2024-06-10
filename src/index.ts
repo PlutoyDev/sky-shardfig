@@ -5,6 +5,8 @@ import {
   MessageFlags,
   RESTPatchAPIInteractionOriginalResponseJSONBody,
   RESTPostAPIWebhookWithTokenJSONBody,
+  RESTPostAPIWebhookWithTokenResult,
+  RESTPostAPIWebhookWithTokenWaitResult,
   Routes,
 } from 'discord-api-types/v10';
 import { mkdir, writeFile } from 'fs/promises';
@@ -64,6 +66,14 @@ log('Starting publish script');
 mkdir('dist', { recursive: true });
 
 try {
+  // Send a webhook message to the Discord channel first
+  const res = await axios.post<RESTPostAPIWebhookWithTokenWaitResult>(process.env.DISCORD_WEBHOOK_URL, {
+    content: 'Publishing configuration...',
+    flags: MessageFlags.SuppressNotifications,
+  } satisfies RESTPostAPIWebhookWithTokenJSONBody, {params: {wait: true}}) 
+
+  const webhookMessageId = res.data.id;
+
   const last3Days = Array.from({ length: 3 }, (_, i) => DateTime.now().minus({ days: i }).toISODate());
   let fetchDates: string[];
   const purge = (await redis.get('publish_purge')) === 'true';
@@ -157,7 +167,7 @@ try {
     log('Responding to interaction');
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
 
-    await Promise.all([
+    Promise.all([
       rest.patch(Routes.webhookMessage(process.env.DISCORD_CLIENT_ID, callback.token, '@original'), {
         body: {
           content: 'Config has been published to Sky-Shards\nThank you for your contribution!',
@@ -170,11 +180,16 @@ try {
   log('Published config');
   log('Config ID: ' + remoteConfigOut.id);
 
-  // Send the logs to the webhook
-  await axios.post(process.env.DISCORD_WEBHOOK_URL, {
+  // // Send the logs to the webhook
+  // await axios.post(process.env.DISCORD_WEBHOOK_URL, {
+  //   content: 'Configuration published\n\n```' + logs.join('\n') + '```',
+  //   flags: MessageFlags.SuppressNotifications,
+  // } satisfies RESTPostAPIWebhookWithTokenJSONBody);
+
+  // Edit the webhook message to include the logs
+  await axios.patch(process.env.DISCORD_WEBHOOK_URL + '/messages/' + webhookMessageId, {
     content: 'Configuration published\n\n```' + logs.join('\n') + '```',
-    flags: MessageFlags.SuppressNotifications,
-  } satisfies RESTPostAPIWebhookWithTokenJSONBody);
+  } satisfies RESTPatchAPIInteractionOriginalResponseJSONBody);
 } catch (err) {
   errorLog('Failed to publish config', err);
   // Send the logs to the webhook
