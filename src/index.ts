@@ -67,16 +67,20 @@ mkdir('dist', { recursive: true });
 
 try {
   // Send a webhook message to the Discord channel first
-  const res = await axios.post<RESTPostAPIWebhookWithTokenWaitResult>(process.env.DISCORD_WEBHOOK_URL, {
-    content: 'Publishing configuration...',
-    flags: MessageFlags.SuppressNotifications,
-  } satisfies RESTPostAPIWebhookWithTokenJSONBody, {params: {wait: true}}) 
+  const res = await axios.post<RESTPostAPIWebhookWithTokenWaitResult>(
+    process.env.DISCORD_WEBHOOK_URL,
+    {
+      content: 'Publishing configuration...',
+      flags: MessageFlags.SuppressNotifications,
+    } satisfies RESTPostAPIWebhookWithTokenJSONBody,
+    { params: { wait: true } },
+  );
 
   const webhookMessageId = res.data.id;
 
   const last3Days = Array.from({ length: 3 }, (_, i) => DateTime.now().minus({ days: i }).toISODate());
   let fetchDates: string[];
-  const purge = (await redis.get('publish_purge')) === 'true';
+  const purge = await redis.get('publish_purge');
   if (purge) {
     // Refetch all dates
     const keys = new Set<string>();
@@ -94,6 +98,8 @@ try {
       const date = key.substring(6);
       fetchDates.push(date);
     }
+
+    redis.del('publish_purge');
   } else {
     fetchDates = last3Days;
   }
