@@ -382,7 +382,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
       // Publish Command
       if (name === 'publish') {
-        const prevConfirmingUser = await redis.set('publish_confirmation_user', member.user.id, { get: true, ex: 600 })
+        const prevConfirmingUser = await redis.set('publish_confirmation_user', member.user.id, { get: true, ex: 200 })
         // TODO: Add QStash Sleep here
         
         if (optionsMap.has('purge')) {
@@ -679,7 +679,8 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         await Promise.all([
           redis.del('publish_confirmation_user'),
           redis.del('publish_callback'),
-          custom_id === 'publish_with_purge_confirm' ? redis.set('publish_purge', 'true') : Promise.resolve(),
+          custom_id === 'publish_with_purge_confirm' ? redis.set('publish_purge', 'true', {ex: 60}) : Promise.resolve(),
+          // TODO: Clear QStash Sleep here
         ]);
 
         try {
