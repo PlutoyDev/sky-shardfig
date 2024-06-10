@@ -602,6 +602,8 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           );
         }
 
+        editStr += '\n\nRemember to </publish:1219872570669531247> the after your changes are completed'
+
         return InteractionResponse({
           type: InteractionResponseType.ChannelMessageWithSource,
           data: { content: editStr },
@@ -642,12 +644,12 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         if (type === 'remove') {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'Warning removed' },
+            data: { content: 'Warning removed\n\nAuto publishing...' },
           });
         } else {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'Warning set as `' + warnings[type] + '`' },
+            data: { content: 'Warning set as `' + warnings[type] + '`\n\nAuto publishing...' },
           });
         }
       }
