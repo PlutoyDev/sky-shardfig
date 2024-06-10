@@ -121,11 +121,6 @@ try {
     id: nanoid(7),
   };
 
-  if (warning) {
-    log('Setting warning');
-    remoteConfigOut.warnings = warning;
-  }
-
   // create a smaller version of the response with only the last 3 days
   const last3DaysMap: Record<string, DailyConfig> = {};
   last3Days.forEach(date => {
@@ -140,6 +135,12 @@ try {
     dailiesMap: last3DaysMap,
     id: remoteConfigOut.id,
   };
+
+  if (warning) {
+    log('Setting warning');
+    remoteConfigOut.warnings = warning;
+    last3DaysResponse.warnings = warning;
+  }
 
   log('Writing to file');
   const fullJson = JSON.stringify(remoteConfigOut);
