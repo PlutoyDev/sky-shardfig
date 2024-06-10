@@ -75,7 +75,11 @@ try {
   );
 
   commands.push(
-    new SlashCommandBuilder().setName('publish').setDescription('Publish the config to Sky-Shards').toJSON(),
+    new SlashCommandBuilder()
+      .setName('publish')
+      .setDescription('Publish the config to Sky-Shards')
+      .addBooleanOption(option => option.setName('purge').setDescription('Purge all previous data'))
+      .toJSON(),
   );
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
