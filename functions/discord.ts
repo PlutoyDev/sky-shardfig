@@ -624,7 +624,16 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         const typeOpt = optionsMap.get('type') as APIApplicationCommandInteractionDataStringOption;
         const type = typeOpt.value as keyof typeof warnings | 'remove';
         const warning = type === 'remove' ? null : type;
-        await setWarning(redis, warning);
+
+        const linkOpt = optionsMap.get('link') as APIApplicationCommandInteractionDataStringOption;
+        if (warning && !linkOpt) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: { content: 'Link is required for warnings' },
+          });
+        }
+
+        await setWarning(redis, warning, linkOpt.value);
 
         context.waitUntil(
           fetch(context.env.CLOUDFLARE_DEPLOY_URL, {

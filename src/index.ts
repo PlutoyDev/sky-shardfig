@@ -61,7 +61,7 @@ const stringifyError = (err: unknown) =>
 
 log('Starting publish script');
 
-mkdir('dist', { recursive: true })
+mkdir('dist', { recursive: true });
 
 try {
   const last3Days = Array.from({ length: 3 }, (_, i) => DateTime.now().minus({ days: i }).toISODate());
@@ -89,7 +89,7 @@ try {
   }
 
   log('Fetching redis data');
-  const [dailies, prevResponse, authorNames, warning, callback] = await Promise.all([
+  const [dailies, prevResponse, authorNames, warningRes, callback] = await Promise.all([
     Promise.all(fetchDates.map(date => getParsedDailyConfig(redis, date))),
     !purge ? getResponse(redis) : null,
     getAuthorNames(redis),
@@ -136,10 +136,11 @@ try {
     id: remoteConfigOut.id,
   };
 
-  if (warning) {
+  if (warningRes) {
+    const { warning, warningLink } = warningRes;
     log('Setting warning');
-    remoteConfigOut.warnings = warning;
-    last3DaysResponse.warnings = warning;
+    last3DaysResponse.warning = remoteConfigOut.warning = warning;
+    last3DaysResponse.warningLink = remoteConfigOut.warningLink = warningLink;
   }
 
   log('Writing to file');
@@ -187,7 +188,8 @@ try {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
     await rest.patch(Routes.webhookMessage(process.env.DISCORD_CLIENT_ID, callback.token, '@original'), {
       body: {
-        content: '<:MothShocked:855634907867250749> Oops!!\n Failed to publish config\nPlutoy has been notified and will look into it.',
+        content:
+          '<:MothShocked:855634907867250749> Oops!!\n Failed to publish config\nPlutoy has been notified and will look into it.',
       } satisfies RESTPatchAPIInteractionOriginalResponseJSONBody,
     });
   }

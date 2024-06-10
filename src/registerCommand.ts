@@ -69,7 +69,9 @@ try {
             name: 'Remove',
             value: 'remove',
           }),
-      ),
+      )
+      .addStringOption(option => option.setName('link').setDescription('Link to more information about the warning'))
+      .toJSON(),
   );
 
   commands.push(

@@ -253,21 +253,22 @@ export const warnings = {
 type Warning = keyof typeof warnings;
 
 export async function getWarning(redis: Redis) {
-  return (redis.get('warnings') ?? null) as unknown as Warning | null;
+  const [warning, warningLink] = await redis.mget('warnings', 'warning_link') as [Warning | null, string];
+  if (!warning) return null;
+  return { warning, warningLink };
 }
 
-export async function setWarning(redis: Redis, warning: Warning | null) {
-  if (warning === null) {
-    await redis.del('warnings');
-  } else {
-    await redis.set('warnings', warning);
-  }
+export async function setWarning(redis: Redis, warning: Warning | null, warningLink: string) {
+  redis.mset({ warnings: warning, warning_link: warningLink });
 }
+
+
 
 export interface RemoteConfigResponse {
   dailiesMap: Record<string, DailyConfig>;
   authorNames: Record<string, string>;
-  warnings?: 'bugged' | 'changed' | 'disabled';
+  warning?: 'bugged' | 'changed' | 'disabled';
+  warningLink?: string;
   // Randomly generated string for polling check
   id: string;
 }
