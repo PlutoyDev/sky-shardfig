@@ -1,11 +1,6 @@
 import { SlashCommandBuilder } from '@discordjs/builders';
 import { REST } from '@discordjs/rest';
-import {
-  RESTPostAPIChatInputApplicationCommandsJSONBody,
-  RESTPutAPIApplicationGuildCommandsJSONBody,
-  RESTPutAPIApplicationGuildCommandsResult,
-  Routes,
-} from 'discord-api-types/v10';
+import { RESTPutAPIApplicationGuildCommandsResult, Routes } from 'discord-api-types/v10';
 import { commonOverrideReasons, memories, warnings } from '../shared/lib.js';
 
 if (process.env.DISCORD_CLIENT_ID === undefined) {
