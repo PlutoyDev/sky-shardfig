@@ -382,6 +382,9 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
       // Publish Command
       if (name === 'publish') {
+        const prevConfirmingUser = await redis.set('publish_confirmation_user', member.user.id, { get: true, ex: 600 })
+        // TODO: Add QStash Sleep here
+        
         if (optionsMap.has('purge')) {
           if (!isSuperUser) {
             return InteractionResponse({
@@ -395,20 +398,20 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
           const purge = optionsMap.get('purge') as APIApplicationCommandInteractionDataBooleanOption;
           if (purge.value) {
-            await redis.set('publish_purge', 'true', { ex: 600 });
             return InteractionResponse({
               type: InteractionResponseType.ChannelMessageWithSource,
               data: {
                 allowed_mentions: { users: ['702740689846272002'] },
                 content:
+                  (prevConfirmingUser ? 'Previous publish request by <@' + prevConfirmingUser + '> has been cancelled\n\n' : '') + 
                   (!isPlutoy ? '<@702740689846272002> Purge notification,\n\n' : '') +
-                  'Are you sure you want to purge the published config?',
+                  'Are you sure you want to purge all previous data and publish the new configurations?',
                 components: [
                   {
                     type: ComponentType.ActionRow,
                     components: [
                       new ButtonBuilder()
-                        .setCustomId('publish_confirm')
+                        .setCustomId('publish_with_purge_confirm')
                         .setLabel('Confirm')
                         .setStyle(ButtonStyle.Success)
                         .toJSON(),
@@ -425,12 +428,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           }
         }
         const last3IsoDates = Array.from({ length: 3 }, (_, i) => DateTime.now().minus({ days: i }).toISODate());
-        const [dailyConfigs, prevConfirmingUser] = await Promise.all([
-          //!: Add defer if needed
-          Promise.all(last3IsoDates.map(date => getParsedDailyConfig(redis, date))),
-          redis.set('publish_confirmation_user', member.user.id, { get: true, ex: 600 }),
-          //TODO: Add QStash Delay
-        ]);
+        const dailyConfigs = await Promise.all(last3IsoDates.map(date => getParsedDailyConfig(redis, date)))
 
         if (dailyConfigs.every(c => !c)) {
           return InteractionResponse({
@@ -658,8 +656,8 @@ export const onRequestPost: PagesFunction<Env> = async context => {
     const custom_id = interaction.data.custom_id;
     console.log('Message Component: ' + custom_id);
     if (custom_id.startsWith('publish_')) {
-      if (custom_id === 'publish_confirm') {
-        const confirmingUser = await redis.get('publish_confirmation_user');
+      if (custom_id === 'publish_confirm' || custom_id === 'publish_with_purge_confirm') {
+        const [confirmingUser] = await redis.mget('publish_confirmation_user');
         if (confirmingUser === null) {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
@@ -678,11 +676,11 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           });
         }
 
-        await redis.del('publish_confirmation_user');
-        await redis.hmset('publish_callback', {
-          id: interaction.id,
-          token: interaction.token,
-        });
+        await Promise.all([
+          redis.del('publish_confirmation_user'),
+          redis.del('publish_callback'),
+          custom_id === 'publish_with_purge_confirm' ? redis.set('publish_purge', 'true') : Promise.resolve(),
+        ]);
 
         try {
           await fetch(context.env.CLOUDFLARE_DEPLOY_URL, {
