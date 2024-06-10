@@ -383,53 +383,60 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
       // Publish Command
       if (name === 'publish') {
-        const prevConfirmingUser = await redis.set('publish_confirmation_user', member.user.id, { get: true, ex: 200 })
-        // TODO: Add QStash Sleep here
-        
-        if (optionsMap.has('purge')) {
-          if (!isSuperUser) {
-            return InteractionResponse({
-              type: InteractionResponseType.ChannelMessageWithSource,
-              data: {
-                content: 'Only specified user can purge',
-                flags: MessageFlags.SuppressNotifications,
-              },
-            });
-          }
+        const rescanFlag = (optionsMap.get('rescan') as APIApplicationCommandInteractionDataBooleanOption | undefined)
+          ?.value;
 
-          const purge = optionsMap.get('purge') as APIApplicationCommandInteractionDataBooleanOption;
-          if (purge.value) {
-            return InteractionResponse({
-              type: InteractionResponseType.ChannelMessageWithSource,
-              data: {
-                allowed_mentions: { users: ['702740689846272002'] },
-                content:
-                  (prevConfirmingUser ? 'Previous publish request by <@' + prevConfirmingUser + '> has been cancelled\n\n' : '') + 
-                  (!isPlutoy ? '<@702740689846272002> Purge notification,\n\n' : '') +
-                  'Are you sure you want to purge all previous data and publish the new configurations?',
-                components: [
-                  {
-                    type: ComponentType.ActionRow,
-                    components: [
-                      new ButtonBuilder()
-                        .setCustomId('publish_with_purge_confirm')
-                        .setLabel('Confirm')
-                        .setStyle(ButtonStyle.Success)
-                        .toJSON(),
-                      new ButtonBuilder()
-                        .setCustomId('publish_cancel')
-                        .setLabel('Cancel')
-                        .setStyle(ButtonStyle.Danger)
-                        .toJSON(),
-                    ],
-                  },
-                ],
-              },
-            });
-          }
+        if (rescanFlag && !isSuperUser) {
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: {
+              content: 'Only specified user publish with rescan\nRetry without setting `rescan`',
+              flags: MessageFlags.SuppressNotifications,
+            },
+          });
         }
+
+        const prevConfirmingUser = await redis.set('publish_confirmation_user', member.user.id, { get: true, ex: 600 });
+        // TODO: Add QStash Sleep here
+
+        if (rescanFlag) {
+          let content = 'Rescan request by <@' + member.user.id + '>\n\n';
+          if (prevConfirmingUser) {
+            content += `Previous publish request by <@${prevConfirmingUser}> has been cancelled\n\n`;
+          }
+          if (!isPlutoy) {
+            content += '<@702740689846272002> Rescan triggered notification,\n\n';
+          }
+          content += 'Are you sure you want to rescan and publish the new configurations?';
+
+          return InteractionResponse({
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: {
+              content,
+              allowed_mentions: { users: ['702740689846272002'] },
+              components: [
+                {
+                  type: ComponentType.ActionRow,
+                  components: [
+                    new ButtonBuilder()
+                      .setCustomId('publish_with_rescan_confirm')
+                      .setLabel('Confirm')
+                      .setStyle(ButtonStyle.Success)
+                      .toJSON(),
+                    new ButtonBuilder()
+                      .setCustomId('publish_cancel')
+                      .setLabel('Cancel')
+                      .setStyle(ButtonStyle.Danger)
+                      .toJSON(),
+                  ],
+                },
+              ],
+            },
+          });
+        }
+
         const last3IsoDates = Array.from({ length: 3 }, (_, i) => DateTime.now().minus({ days: i }).toISODate());
-        const dailyConfigs = await Promise.all(last3IsoDates.map(date => getParsedDailyConfig(redis, date)))
+        const dailyConfigs = await Promise.all(last3IsoDates.map(date => getParsedDailyConfig(redis, date)));
 
         if (dailyConfigs.every(c => !c)) {
           return InteractionResponse({
@@ -485,7 +492,6 @@ export const onRequestPost: PagesFunction<Env> = async context => {
       }
 
       if (name === 'set_daily') {
-
         let date = DateTime.now().setZone('America/Los_Angeles');
         const dateInput = optionsMap.get('date') as APIApplicationCommandInteractionDataStringOption | undefined;
 
@@ -601,7 +607,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           );
         }
 
-        editStr += '\n\nRemember to </publish:1219872570669531247> the after your changes are completed'
+        editStr += '\n\nRemember to </publish:1219872570669531247> the after your changes are completed';
 
         return InteractionResponse({
           type: InteractionResponseType.ChannelMessageWithSource,
@@ -621,7 +627,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         }
 
         const typeOpt = optionsMap.get('type') as APIApplicationCommandInteractionDataStringOption;
-        const type = typeOpt.value as keyof typeof warnings
+        const type = typeOpt.value as keyof typeof warnings;
 
         const linkOpt = optionsMap.get('link') as APIApplicationCommandInteractionDataStringOption;
         if (type && !linkOpt) {
@@ -641,7 +647,14 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
         return InteractionResponse({
           type: InteractionResponseType.ChannelMessageWithSource,
-          data: { content: 'Warning set as `' + warnings[type] + '`\nMore information link to <' + linkOpt.value + '>\nAuto publishing...' },
+          data: {
+            content:
+              'Warning set as `' +
+              warnings[type] +
+              '`\nMore information link to <' +
+              linkOpt.value +
+              '>\nAuto publishing...',
+          },
         });
       }
 
@@ -657,7 +670,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         }
 
         await clearWarning(redis);
-        
+
         context.waitUntil(
           fetch(context.env.CLOUDFLARE_DEPLOY_URL, {
             method: 'POST',
@@ -674,7 +687,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
     const custom_id = interaction.data.custom_id;
     console.log('Message Component: ' + custom_id);
     if (custom_id.startsWith('publish_')) {
-      if (custom_id === 'publish_confirm' || custom_id === 'publish_with_purge_confirm') {
+      if (custom_id === 'publish_confirm' || custom_id === 'publish_with_rescan_confirm') {
         const [confirmingUser] = await redis.mget('publish_confirmation_user');
         if (confirmingUser === null) {
           return InteractionResponse({
@@ -697,7 +710,9 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         await Promise.all([
           redis.del('publish_confirmation_user'),
           redis.del('publish_callback'),
-          custom_id === 'publish_with_purge_confirm' ? redis.set('publish_purge', 'true', {ex: 60}) : Promise.resolve(),
+          custom_id === 'publish_with_rescan_confirm'
+            ? redis.set('publish_rescan', 'true', { ex: 60 })
+            : Promise.resolve(),
           // TODO: Clear QStash Sleep here
         ]);
 

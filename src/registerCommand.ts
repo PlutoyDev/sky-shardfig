@@ -74,15 +74,15 @@ try {
   commands.push(
     new SlashCommandBuilder()
       .setName('clear_warning')
-      .setDescription('Clear the pop up warning')
+      .setDescription('For Plutoy to clear the pop up warning')
       .toJSON(),
-  )
+  );
 
   commands.push(
     new SlashCommandBuilder()
       .setName('publish')
       .setDescription('Publish the config to Sky-Shards')
-      .addBooleanOption(option => option.setName('purge').setDescription('Purge all previous data'))
+      .addBooleanOption(option => option.setName('rescan').setDescription('Rescan all dates (Resricted)'))
       .toJSON(),
   );
 

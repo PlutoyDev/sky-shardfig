@@ -80,8 +80,8 @@ try {
 
   const last3Days = Array.from({ length: 3 }, (_, i) => DateTime.now().minus({ days: i }).toISODate());
   let fetchDates: string[];
-  const purge = await redis.get('publish_purge');
-  if (purge) {
+  const rescan = await redis.get('publish_rescan');
+  if (rescan) {
     // Refetch all dates
     const keys = new Set<string>();
     let cursor = 0;
@@ -99,7 +99,7 @@ try {
       fetchDates.push(date);
     }
 
-    redis.del('publish_purge');
+    redis.del('publish_rescan');
   } else {
     fetchDates = last3Days;
   }
@@ -107,7 +107,7 @@ try {
   log('Fetching redis data');
   const [dailies, prevResponse, authorNames, warningRes, callback] = await Promise.all([
     Promise.all(fetchDates.map(date => getParsedDailyConfig(redis, date))),
-    !purge ? getResponse(redis) : null,
+    !rescan ? getResponse(redis) : null,
     getAuthorNames(redis),
     getWarning(redis),
     redis.hgetall<Record<'id' | 'token', string>>('publish_callback'),
