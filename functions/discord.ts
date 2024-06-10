@@ -36,6 +36,7 @@ import {
   numMapVarients,
   setWarning,
   warnings,
+  clearWarning,
 } from '../shared/lib.js';
 
 interface Env {
@@ -484,8 +485,6 @@ export const onRequestPost: PagesFunction<Env> = async context => {
       }
 
       if (name === 'set_daily') {
-        // const publishReminder =
-        //   'Remember to </publish:1219872570669531247> the after your changes are completed';
 
         let date = DateTime.now().setZone('America/Los_Angeles');
         const dateInput = optionsMap.get('date') as APIApplicationCommandInteractionDataStringOption | undefined;
@@ -610,7 +609,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         });
       }
 
-      if (name === 'set_warnings') {
+      if (name === 'set_warning') {
         if (!isPlutoy) {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
@@ -622,18 +621,17 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         }
 
         const typeOpt = optionsMap.get('type') as APIApplicationCommandInteractionDataStringOption;
-        const type = typeOpt.value as keyof typeof warnings | 'remove';
-        const warning = type === 'remove' ? null : type;
+        const type = typeOpt.value as keyof typeof warnings
 
         const linkOpt = optionsMap.get('link') as APIApplicationCommandInteractionDataStringOption;
-        if (warning && !linkOpt) {
+        if (type && !linkOpt) {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
             data: { content: 'Link is required for warnings' },
           });
         }
 
-        await setWarning(redis, warning, linkOpt.value);
+        await setWarning(redis, type, linkOpt.value);
 
         context.waitUntil(
           fetch(context.env.CLOUDFLARE_DEPLOY_URL, {
@@ -641,17 +639,35 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           }),
         );
 
-        if (type === 'remove') {
+        return InteractionResponse({
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: { content: 'Warning set as `' + warnings[type] + '`\nMore information link to <' + linkOpt.value + '>\nAuto publishing...' },
+        });
+      }
+
+      if (name === 'clear_warning') {
+        if (!isPlutoy) {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'Warning removed\n\nAuto publishing...' },
-          });
-        } else {
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'Warning set as `' + warnings[type] + '`\n\nAuto publishing...' },
+            data: {
+              content: 'Only Plutoy can clear warnings',
+              flags: MessageFlags.SuppressNotifications,
+            },
           });
         }
+
+        await clearWarning(redis);
+        
+        context.waitUntil(
+          fetch(context.env.CLOUDFLARE_DEPLOY_URL, {
+            method: 'POST',
+          }),
+        );
+
+        return InteractionResponse({
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: { content: 'Warning cleared\nAuto publishing...' },
+        });
       }
     }
   } else if (interaction.type === InteractionType.MessageComponent) {

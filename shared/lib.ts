@@ -259,10 +259,12 @@ export async function getWarning(redis: Redis) {
 }
 
 export async function setWarning(redis: Redis, warning: Warning | null, warningLink: string) {
-  redis.mset({ warnings: warning, warning_link: warningLink });
+  return redis.mset({ warnings: warning, warning_link: warningLink });
 }
 
-
+export async function clearWarning(redis: Redis) {
+  return redis.del('warnings', 'warning_link');
+}
 
 export interface RemoteConfigResponse {
   dailiesMap: Record<string, DailyConfig>;

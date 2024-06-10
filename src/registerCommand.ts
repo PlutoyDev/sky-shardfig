@@ -59,20 +59,24 @@ try {
 
   commands.push(
     new SlashCommandBuilder()
-      .setName('set_warnings')
+      .setName('set_warning')
       .setDescription('For Plutoy to set the pop up warning')
       .addStringOption(option =>
         option
           .setName('type')
           .setDescription('type of warning pop up')
-          .addChoices(...Object.entries(warnings).map(([value, name]) => ({ name, value })), {
-            name: 'Remove',
-            value: 'remove',
-          }),
+          .addChoices(...Object.entries(warnings).map(([value, name]) => ({ name, value }))),
       )
       .addStringOption(option => option.setName('link').setDescription('Link to more information about the warning'))
       .toJSON(),
   );
+
+  commands.push(
+    new SlashCommandBuilder()
+      .setName('clear_warning')
+      .setDescription('Clear the pop up warning')
+      .toJSON(),
+  )
 
   commands.push(
     new SlashCommandBuilder()
