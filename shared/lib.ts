@@ -254,7 +254,7 @@ type Warning = keyof typeof warnings;
 
 export async function getWarning(redis: Redis) {
   const [warning, warningLink] = await redis.mget('warnings', 'warning_link') as [Warning | null, string];
-  if (!warning) return null;
+  if (!warning || !warningLink) return null;
   return { warning, warningLink };
 }
 
