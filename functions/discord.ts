@@ -562,7 +562,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
             } else {
               edits.variation = variOpt.value;
               const previewInfographic = `https://v8.sky-shards.pages.dev/infographics/map_varient_clement/${shardInfo.map}.${variOpt.value}.webp`;
-              editStr += `Variation set as ${formatField('variation', variOpt.value)} [Preview](${previewInfographic})\n`;
+              editStr += `Variation set as [${formatField('variation', variOpt.value)}](${previewInfographic})\n`;
             }
           }
         }
