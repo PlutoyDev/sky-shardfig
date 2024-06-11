@@ -173,7 +173,7 @@ try {
     log('Responding to interaction');
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
 
-    Promise.all([
+    await Promise.all([
       rest.patch(Routes.webhookMessage(process.env.DISCORD_CLIENT_ID, callback.token, '@original'), {
         body: {
           content: 'Config has been published to Sky-Shards\nThank you for your contribution!',
