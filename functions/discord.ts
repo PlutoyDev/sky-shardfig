@@ -455,7 +455,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
         for (const c of dailyConfigs) {
           if (!c) continue;
-          msg += `For **${c.date}**\n`;
+          msg += `For **${c.date}**\n`; // TODO: Showing up as undefined
           if (c.memory) msg += 'Memory: ' + formatField('memory', c.memory) + '\n';
           if (c.variation) msg += 'Variation: ' + formatField('variation', c.variation) + '\n';
           if (c.overrideReason) msg += 'Override Reason: ' + formatField('overrideReason', c.overrideReason) + '\n';
@@ -560,7 +560,8 @@ export const onRequestPost: PagesFunction<Env> = async context => {
               editStr += 'Variation removed\n';
             } else {
               edits.variation = variOpt.value;
-              editStr += 'Variation set as ' + formatField('variation', variOpt.value) + '\n';
+              const previewInfographic = `https://v8.sky-shards.pages.dev/infographics/map_varient_clement/${shardInfo.map}.${variOpt.value}.webp`;
+              editStr += `Variation set as ${formatField('variation', variOpt.value)} [Preview](${previewInfographic})\n`;
             }
           }
         }
