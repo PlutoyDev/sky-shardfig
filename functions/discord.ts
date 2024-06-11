@@ -453,9 +453,10 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
         msg += 'The following are the current configurations:\n\n';
 
-        for (const c of dailyConfigs) {
+        for (let i = 0; i < 3; i++) {
+          const c = dailyConfigs[i];
           if (!c) continue;
-          msg += `For **${c.date}**\n`; // TODO: Showing up as undefined
+          msg += `For **${last3IsoDates[i]}**\n`;
           if (c.memory) msg += 'Memory: ' + formatField('memory', c.memory) + '\n';
           if (c.variation) msg += 'Variation: ' + formatField('variation', c.variation) + '\n';
           if (c.overrideReason) msg += 'Override Reason: ' + formatField('overrideReason', c.overrideReason) + '\n';
