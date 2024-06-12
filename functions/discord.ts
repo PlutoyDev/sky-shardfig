@@ -13,8 +13,7 @@ import {
   ButtonStyle,
   ComponentType,
   RESTPatchAPIWebhookWithTokenMessageJSONBody,
-} from 'discord-api-types/v10';
-import {
+  RouteBases,
   InteractionType,
   InteractionResponseType,
   MessageFlags,
@@ -406,7 +405,8 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           redis.get<string | null>('qstash_message_id').then(id => (id ? qstash.messages.delete(id) : undefined)),
           qstash
             .publishJSON({
-              url: Routes.webhookMessage(context.env.DISCORD_CLIENT_ID, interaction.token, '@original'),
+              url:
+                RouteBases.api + Routes.webhookMessage(context.env.DISCORD_CLIENT_ID, interaction.token, '@original'),
               method: 'PATCH',
               delay: 600,
               body: {
