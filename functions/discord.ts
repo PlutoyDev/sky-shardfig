@@ -1,5 +1,6 @@
 import { ButtonBuilder, EmbedBuilder, StringSelectMenuBuilder } from '@discordjs/builders';
 import { REST } from '@discordjs/rest';
+import { Client as QStashCient } from '@upstash/qstash';
 import { Redis } from '@upstash/redis/cloudflare';
 import {
   APIApplicationCommandInteractionDataBooleanOption,
@@ -11,6 +12,7 @@ import {
   APIInteractionResponseCallbackData,
   ButtonStyle,
   ComponentType,
+  RESTPatchAPIWebhookWithTokenMessageJSONBody,
 } from 'discord-api-types/v10';
 import {
   InteractionType,
@@ -42,6 +44,7 @@ import {
 interface Env {
   UPSTASH_REDIS_REST_URL: string;
   UPSTASH_REDIS_REST_TOKEN: string;
+  UPSTASH_QSTASH_TOKEN: string;
   DISCORD_WEBHOOK_URL: string;
   DISCORD_CLIENT_ID: string;
   DISCORD_CLIENT_SECRET: string;
@@ -369,6 +372,8 @@ export const onRequestPost: PagesFunction<Env> = async context => {
     token: context.env.UPSTASH_REDIS_REST_TOKEN,
   });
 
+  const qstash = new QStashCient({ token: context.env.UPSTASH_QSTASH_TOKEN });
+
   const resovledName = member.nick ?? member.user.global_name ?? member.user.username;
   const isPlutoy = member.user.id === '702740689846272002';
   const isSuperUser = ['702740689846272002'].includes(member.user.id);
@@ -396,14 +401,31 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           });
         }
 
-        const prevConfirmingUser = await redis.set('publish_confirmation_user', member.user.id, { get: true, ex: 600 });
-        // TODO: Add QStash Sleep here
+        const [prevConfirmingUser] = await Promise.all([
+          redis.set('publish_confirmation_user', member.user.id, { get: true, ex: 600 }),
+          redis.get<string | null>('qstash_message_id').then(id => (id ? qstash.messages.delete(id) : undefined)),
+          qstash
+            .publishJSON({
+              url: Routes.webhookMessage(context.env.DISCORD_CLIENT_ID, interaction.token, '@original'),
+              method: 'PATCH',
+              delay: 600,
+              body: {
+                content: `<@${member.user.id}> Publish request has expired`,
+                components: [],
+                allowed_mentions: { users: [member.user.id] },
+              } satisfies RESTPatchAPIWebhookWithTokenMessageJSONBody,
+            })
+            .then(({ messageId }) => redis.set('qstash_message_id', messageId, { ex: 600 })), // Set qstash message id, so that it can be deleted later
+        ]);
+
+        let content = '';
+
+        if (prevConfirmingUser) {
+          content += `Previous publish request by <@${prevConfirmingUser}> has been cancelled\n\n`;
+        }
 
         if (rescanFlag) {
-          let content = 'Rescan request by <@' + member.user.id + '>\n\n';
-          if (prevConfirmingUser) {
-            content += `Previous publish request by <@${prevConfirmingUser}> has been cancelled\n\n`;
-          }
+          content += 'Rescan request by <@' + member.user.id + '>\n\n';
           if (!isPlutoy) {
             content += '<@702740689846272002> Rescan triggered notification,\n\n';
           }
@@ -445,32 +467,26 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           });
         }
 
-        let msg = '';
-
-        if (prevConfirmingUser) {
-          msg += `Previous publish request by <@${prevConfirmingUser}> has been cancelled\n\n`;
-        }
-
-        msg += 'The following are the current configurations:\n\n';
+        content += 'The following are the current configurations:\n\n';
 
         for (let i = 0; i < 3; i++) {
           const c = dailyConfigs[i];
           if (!c) continue;
-          msg += `For **${last3IsoDates[i]}**\n`;
-          if (c.memory) msg += 'Memory: ' + formatField('memory', c.memory) + '\n';
-          if (c.variation) msg += 'Variation: ' + formatField('variation', c.variation) + '\n';
-          if (c.overrideReason) msg += 'Override Reason: ' + formatField('overrideReason', c.overrideReason) + '\n';
-          if (c.override) msg += 'Override: ' + formatField('override', c.override) + '\n';
-          msg += '\n';
+          content += `For **${last3IsoDates[i]}**\n`;
+          if (c.memory) content += 'Memory: ' + formatField('memory', c.memory) + '\n';
+          if (c.variation) content += 'Variation: ' + formatField('variation', c.variation) + '\n';
+          if (c.overrideReason) content += 'Override Reason: ' + formatField('overrideReason', c.overrideReason) + '\n';
+          if (c.override) content += 'Override: ' + formatField('override', c.override) + '\n';
+          content += '\n';
         }
 
-        msg += '\nDo you want to publish these configurations?';
+        content += '\nDo you want to publish these configurations?';
 
         return InteractionResponse({
           type: InteractionResponseType.ChannelMessageWithSource,
           data: {
+            content,
             allowed_mentions: prevConfirmingUser ? { users: [prevConfirmingUser] } : undefined,
-            content: msg,
             components: [
               {
                 type: ComponentType.ActionRow,
@@ -690,7 +706,10 @@ export const onRequestPost: PagesFunction<Env> = async context => {
     console.log('Message Component: ' + custom_id);
     if (custom_id.startsWith('publish_')) {
       if (custom_id === 'publish_confirm' || custom_id === 'publish_with_rescan_confirm') {
-        const [confirmingUser] = await redis.mget('publish_confirmation_user');
+        const [confirmingUser, qstashMsgId] = await redis.mget<[string | null, string | null]>(
+          'publish_confirmation_user',
+          'qstash_message_id',
+        );
         if (confirmingUser === null) {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
@@ -710,12 +729,12 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         }
 
         await Promise.all([
-          redis.del('publish_confirmation_user'),
-          redis.del('publish_callback'),
+          redis.del('publish_confirmation_user', 'publish_callback', 'qstash_message_id'),
           custom_id === 'publish_with_rescan_confirm'
             ? redis.set('publish_rescan', 'true', { ex: 60 })
             : Promise.resolve(),
           // TODO: Clear QStash Sleep here
+          qstash.messages.delete(qstashMsgId!),
         ]);
 
         try {
