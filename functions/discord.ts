@@ -473,10 +473,11 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           const c = dailyConfigs[i];
           if (!c) continue;
           content += `For **${last3IsoDates[i]}**\n`;
-          if (c.memory) content += 'Memory: ' + formatField('memory', c.memory) + '\n';
-          if (c.variation) content += 'Variation: ' + formatField('variation', c.variation) + '\n';
-          if (c.overrideReason) content += 'Override Reason: ' + formatField('overrideReason', c.overrideReason) + '\n';
-          if (c.override) content += 'Override: ' + formatField('override', c.override) + '\n';
+          if (c.memory !== undefined) content += 'Memory: ' + formatField('memory', c.memory) + '\n';
+          if (c.variation !== undefined) content += 'Variation: ' + formatField('variation', c.variation) + '\n';
+          if (c.overrideReason !== undefined)
+            content += 'Override Reason: ' + formatField('overrideReason', c.overrideReason) + '\n';
+          if (c.override !== undefined) content += 'Override: ' + formatField('override', c.override) + '\n';
           content += '\n';
         }
 
