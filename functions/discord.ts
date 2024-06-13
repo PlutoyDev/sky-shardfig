@@ -730,7 +730,8 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         }
 
         await Promise.all([
-          redis.del('publish_confirmation_user', 'publish_callback', 'qstash_message_id'),
+          redis.del('publish_confirmation_user', 'qstash_message_id'),
+          redis.hset('publish_callback', { id: interaction.id, token: interaction.token }),
           custom_id === 'publish_with_rescan_confirm'
             ? redis.set('publish_rescan', 'true', { ex: 60 })
             : Promise.resolve(),
