@@ -176,7 +176,8 @@ try {
     await Promise.all([
       rest.patch(Routes.webhookMessage(process.env.DISCORD_CLIENT_ID, callback.token, '@original'), {
         body: {
-          content: 'Config has been published to Sky-Shards\nThank you for your contribution!',
+          content:
+            'Config has been published to Sky-Shards\nThank you for your contribution!\n\n[View raw config](https://sky-shardfig.plutoy.top/minified.json)',
         } satisfies RESTPatchAPIInteractionOriginalResponseJSONBody,
       }),
       redis.del('publish_callback'),
@@ -186,15 +187,12 @@ try {
   log('Published config');
   log('Config ID: ' + remoteConfigOut.id);
 
-  // // Send the logs to the webhook
-  // await axios.post(process.env.DISCORD_WEBHOOK_URL, {
-  //   content: 'Configuration published\n\n```' + logs.join('\n') + '```',
-  //   flags: MessageFlags.SuppressNotifications,
-  // } satisfies RESTPostAPIWebhookWithTokenJSONBody);
-
   // Edit the webhook message to include the logs
   await axios.patch(process.env.DISCORD_WEBHOOK_URL + '/messages/' + webhookMessageId, {
-    content: 'Configuration published\n\n```' + logs.join('\n') + '```',
+    content:
+      'Configuration published\n\n```' +
+      logs.join('\n') +
+      '```\n\n[View raw config](https://sky-shardfig.plutoy.top/minified.json)',
   } satisfies RESTPatchAPIInteractionOriginalResponseJSONBody);
 } catch (err) {
   errorLog('Failed to publish config', err);
