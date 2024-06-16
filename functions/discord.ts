@@ -23,6 +23,7 @@ import {
   APIMessageComponent,
   APIActionRowComponent,
   APIMessageActionRowComponent,
+  RESTPostAPIWebhookWithTokenJSONBody,
 } from 'discord-api-types/v10';
 import { DateTime } from 'luxon';
 import nacl from 'tweetnacl';
@@ -58,6 +59,7 @@ interface Env {
   DISABLE_PUBLISHED: string | undefined;
   CLOUDFLARE_ACCOUNT_ID: string;
   CLOUDFLARE_API_TOKEN: string;
+  DISCORD_REMINDER_WEBHOOK_URL: string;
 }
 // Environment variables are injected at build time, so cannot destructured, cannot access with []
 
@@ -765,6 +767,35 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           data: { content: 'Warning cleared\nAuto publishing...' },
         });
       }
+
+      if (name === 'remind_me') {
+        // Max delay for qstash is 7 day.
+        const next7Days = Array.from({ length: 7 }, (_, i) => DateTime.now().plus({ days: i }).toISODate());
+        const shardInfos = next7Days.map(date => getShardInfo(DateTime.fromISO(date)));
+
+        const next5HasConfig = shardInfos
+          .filter(info => info.hasShard && (info.isRed || info.numVarient > 1))
+          .slice(0, 5);
+
+        return InteractionResponse({
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: {
+            content: 'Which date do you want to be reminded?',
+            components: [
+              {
+                type: ComponentType.ActionRow,
+                components: next5HasConfig.map((info, i) =>
+                  new ButtonBuilder()
+                    .setCustomId(`remind_${info.date.toISODate()}`)
+                    .setLabel(info.date.toFormat('yyyy-MM-dd'))
+                    .setStyle(ButtonStyle.Primary)
+                    .toJSON(),
+                ),
+              },
+            ],
+          },
+        });
+      }
     }
   } else if (interaction.type === InteractionType.MessageComponent) {
     const custom_id = interaction.data.custom_id;
@@ -941,6 +972,53 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           },
         });
       }
+    } else if (custom_id.startsWith('remind_')) {
+      const date = DateTime.fromISO(custom_id.slice(7), { zone: 'America/Los_Angeles' });
+      const shardInfo = getShardInfo(date);
+
+      const remindDT = shardInfo.occurrences.find(o => o.land > DateTime.now())?.land;
+
+      if (!remindDT) {
+        return InteractionResponse({
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: {
+            content: 'Shard has already landed for ' + date.toISODate(),
+          },
+        });
+      }
+
+      await qstash.publishJSON({
+        url: context.env.DISCORD_REMINDER_WEBHOOK_URL,
+        method: 'POST',
+        notBefore: remindDT.toUnixInteger(),
+        headers: { 'Content-Type': 'application/json' },
+        body: {
+          content:
+            `<@${member.user.id}> Reminder for ${date.toISODate()}\n` +
+            `${shardInfo.isRed ? 'Red' : 'Black'} Shard just landed in ${stringsEn.skyMaps[shardInfo.map as keyof typeof stringsEn.skyMaps]} and will be available until ${shardInfo.occurrences[0].end.toFormat("'<t:'X':t>'")}`,
+          allowed_mentions: { users: [member.user.id] },
+          components: [
+            {
+              type: ComponentType.ActionRow,
+              components: [
+                new ButtonBuilder()
+                  .setCustomId(`remind_${date.plus({ days: 1 }).toISODate()}`)
+                  .setLabel('Remind me tomorrow')
+                  .setStyle(ButtonStyle.Primary)
+                  .toJSON(),
+              ],
+            },
+          ],
+        } satisfies RESTPostAPIWebhookWithTokenJSONBody,
+      });
+
+      return InteractionResponse({
+        type: InteractionResponseType.UpdateMessage,
+        data: {
+          content: 'Reminder set for ' + date.toISODate(),
+          components: [],
+        },
+      });
     }
   }
 

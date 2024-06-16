@@ -90,6 +90,10 @@ try {
       .toJSON(),
   );
 
+  commands.push(
+    new SlashCommandBuilder().setName('remind_me').setDescription('Set a reminder for next shard').toJSON(),
+  );
+
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
 
   const guildId = '1219255956207046727';
