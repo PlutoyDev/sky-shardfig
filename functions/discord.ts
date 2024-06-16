@@ -762,8 +762,10 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
       if (name === 'remind_me') {
         // Max delay for qstash is 7 day.
-        const next7Days = Array.from({ length: 7 }, (_, i) => DateTime.now().plus({ days: i }).toISODate());
-        const shardInfos = next7Days.map(date => getShardInfo(DateTime.fromISO(date)));
+        const next7Days = Array.from({ length: 7 }, (_, i) =>
+          DateTime.local({ zone: 'America/Los_Angeles' }).plus({ days: i }),
+        );
+        const shardInfos = next7Days.map(date => getShardInfo(date));
 
         const next5HasConfig = shardInfos
           .filter(info => info.hasShard && (info.isRed || info.numVarient > 1))
