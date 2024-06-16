@@ -780,6 +780,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         return InteractionResponse({
           type: InteractionResponseType.ChannelMessageWithSource,
           data: {
+            flags: MessageFlags.Ephemeral,
             content: 'Which date do you want to be reminded?',
             components: [
               {
@@ -1015,6 +1016,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
       return InteractionResponse({
         type: InteractionResponseType.UpdateMessage,
         data: {
+          flags: MessageFlags.Ephemeral,
           content: 'Reminder set for ' + date.toISODate(),
           components: [],
         },
