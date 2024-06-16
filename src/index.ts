@@ -198,7 +198,7 @@ try {
       logs.join('\n') +
       '```\n' +
       '```json\n' +
-      JSON.stringify(remoteConfigOut, null, 2) +
+      JSON.stringify(rescan ? remoteConfigOut : last3DaysResponse, null, 2) +
       '\n```',
     components: [
       {
