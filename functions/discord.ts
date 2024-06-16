@@ -38,6 +38,7 @@ import {
   setWarning,
   warnings,
   clearWarning,
+  RemoteConfigResponse,
 } from '../shared/lib.js';
 
 interface Env {
@@ -458,7 +459,10 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         }
 
         const last3IsoDates = Array.from({ length: 3 }, (_, i) => DateTime.now().minus({ days: i }).toISODate());
-        const dailyConfigs = await Promise.all(last3IsoDates.map(date => getParsedDailyConfig(redis, date)));
+        const [dailyConfigs, prevConfig] = await Promise.all([
+          Promise.all(last3IsoDates.map(date => getParsedDailyConfig(redis, date))),
+          redis.get<RemoteConfigResponse>('outCache'),
+        ]);
 
         if (dailyConfigs.every(c => !c)) {
           return InteractionResponse({
@@ -473,11 +477,37 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           const c = dailyConfigs[i];
           if (!c) continue;
           content += `For **${last3IsoDates[i]}**\n`;
-          if (c.memory !== undefined) content += 'Memory: ' + formatField('memory', c.memory) + '\n';
-          if (c.variation !== undefined) content += 'Variation: ' + formatField('variation', c.variation) + '\n';
-          if (c.overrideReason !== undefined)
-            content += 'Override Reason: ' + formatField('overrideReason', c.overrideReason) + '\n';
-          if (c.override !== undefined) content += 'Override: ' + formatField('override', c.override) + '\n';
+          // Check for changes
+          const prevC = prevConfig?.dailiesMap[last3IsoDates[i]];
+          if (c.memory !== undefined) {
+            content += 'Memory: ';
+            if (prevC && prevC.memory !== undefined && c.memory !== prevC.memory) {
+              content += formatField('memory', prevC.memory) + ' -> ';
+            }
+            content += formatField('memory', c.memory) + '\n';
+          }
+          if (c.variation !== undefined) {
+            content += 'Variation: ';
+            if (prevC && prevC.variation !== undefined && c.variation !== prevC.variation) {
+              content += formatField('variation', prevC.variation) + ' -> ';
+            }
+            content += formatField('variation', c.variation) + '\n';
+          }
+          if (c.overrideReason !== undefined) {
+            content += 'Override Reason: ';
+            if (prevC && prevC.overrideReason !== undefined && c.overrideReason !== prevC.overrideReason) {
+              content += formatField('overrideReason', prevC.overrideReason) + ' -> ';
+            }
+            content += formatField('overrideReason', c.overrideReason) + '\n';
+          }
+          if (c.override !== undefined) {
+            content += 'Override: ';
+            if (prevC && prevC.override !== undefined && c.override !== prevC.override) {
+              content += formatField('override', prevC.override) + ' -> ';
+            }
+            content += formatField('override', c.override) + '\n';
+          }
+
           content += '\n';
         }
 
