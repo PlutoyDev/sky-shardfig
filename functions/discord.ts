@@ -363,16 +363,6 @@ export const onRequestPost: PagesFunction<Env> = async context => {
     });
   }
 
-  if (channel?.id !== '1219629213238296676') {
-    return InteractionResponse({
-      type: InteractionResponseType.ChannelMessageWithSource,
-      data: {
-        content: 'This command is not allowed in this channel',
-        flags: MessageFlags.Ephemeral,
-      },
-    });
-  }
-
   const discordRest = new REST({ version: '10' }).setToken(context.env.DISCORD_BOT_TOKEN);
 
   const redis = new Redis({
@@ -394,63 +384,145 @@ export const onRequestPost: PagesFunction<Env> = async context => {
       const optionsMap = new Map(options?.map(option => [option.name, option]));
       console.log('Slash Command: ' + name, optionsMap);
 
-      // Publish Command
-      if (name === 'publish') {
-        const rescanFlag = (optionsMap.get('rescan') as APIApplicationCommandInteractionDataBooleanOption | undefined)
-          ?.value;
+      if (channel?.id === '1219629213238296676') {
+        // Publish Command
+        if (name === 'publish') {
+          const rescanFlag = (optionsMap.get('rescan') as APIApplicationCommandInteractionDataBooleanOption | undefined)
+            ?.value;
 
-        if (rescanFlag && !isSuperUser) {
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: {
-              content: 'Only specified user publish with rescan\nRetry without setting `rescan`',
-              flags: MessageFlags.SuppressNotifications,
-            },
-          });
-        }
-
-        const [prevConfirmingUser] = await Promise.all([
-          redis.set('publish_confirmation_user', member.user.id, { get: true, ex: 600 }),
-          redis.get<string | null>('qstash_message_id').then(id => (id ? qstash.messages.delete(id) : undefined)),
-          qstash
-            .publishJSON({
-              url:
-                RouteBases.api + Routes.webhookMessage(context.env.DISCORD_CLIENT_ID, interaction.token, '@original'),
-              method: 'PATCH',
-              delay: 600,
-              body: {
-                content: `<@${member.user.id}> Publish request has expired`,
-                components: [],
-                allowed_mentions: { users: [member.user.id] },
-              } satisfies RESTPatchAPIWebhookWithTokenMessageJSONBody,
-            })
-            .then(({ messageId }) => redis.set('qstash_message_id', messageId, { ex: 600 })), // Set qstash message id, so that it can be deleted later
-        ]);
-
-        let content = '';
-
-        if (prevConfirmingUser) {
-          content += `Previous publish request by <@${prevConfirmingUser}> has been cancelled\n\n`;
-        }
-
-        if (rescanFlag) {
-          content += 'Rescan request by <@' + member.user.id + '>\n\n';
-          if (!isPlutoy) {
-            content += '<@702740689846272002> Rescan triggered notification,\n\n';
+          if (rescanFlag && !isSuperUser) {
+            return InteractionResponse({
+              type: InteractionResponseType.ChannelMessageWithSource,
+              data: {
+                content: 'Only specified user publish with rescan\nRetry without setting `rescan`',
+                flags: MessageFlags.SuppressNotifications,
+              },
+            });
           }
-          content += 'Are you sure you want to rescan and publish the new configurations?';
+
+          const [prevConfirmingUser] = await Promise.all([
+            redis.set('publish_confirmation_user', member.user.id, { get: true, ex: 600 }),
+            redis.get<string | null>('qstash_message_id').then(id => (id ? qstash.messages.delete(id) : undefined)),
+            qstash
+              .publishJSON({
+                url:
+                  RouteBases.api + Routes.webhookMessage(context.env.DISCORD_CLIENT_ID, interaction.token, '@original'),
+                method: 'PATCH',
+                delay: 600,
+                body: {
+                  content: `<@${member.user.id}> Publish request has expired`,
+                  components: [],
+                  allowed_mentions: { users: [member.user.id] },
+                } satisfies RESTPatchAPIWebhookWithTokenMessageJSONBody,
+              })
+              .then(({ messageId }) => redis.set('qstash_message_id', messageId, { ex: 600 })), // Set qstash message id, so that it can be deleted later
+          ]);
+
+          let content = '';
+
+          if (prevConfirmingUser) {
+            content += `Previous publish request by <@${prevConfirmingUser}> has been cancelled\n\n`;
+          }
+
+          if (rescanFlag) {
+            content += 'Rescan request by <@' + member.user.id + '>\n\n';
+            if (!isPlutoy) {
+              content += '<@702740689846272002> Rescan triggered notification,\n\n';
+            }
+            content += 'Are you sure you want to rescan and publish the new configurations?';
+
+            return InteractionResponse({
+              type: InteractionResponseType.ChannelMessageWithSource,
+              data: {
+                content,
+                allowed_mentions: { users: ['702740689846272002'] },
+                components: [
+                  {
+                    type: ComponentType.ActionRow,
+                    components: [
+                      new ButtonBuilder()
+                        .setCustomId('publish_with_rescan_confirm')
+                        .setLabel('Confirm')
+                        .setStyle(ButtonStyle.Success)
+                        .toJSON(),
+                      new ButtonBuilder()
+                        .setCustomId('publish_cancel')
+                        .setLabel('Cancel')
+                        .setStyle(ButtonStyle.Danger)
+                        .toJSON(),
+                    ],
+                  },
+                ],
+              },
+            });
+          }
+
+          const last3IsoDates = Array.from({ length: 3 }, (_, i) => DateTime.now().minus({ days: i }).toISODate());
+          const [dailyConfigs, prevConfig] = await Promise.all([
+            Promise.all(last3IsoDates.map(date => getParsedDailyConfig(redis, date))),
+            redis.get<RemoteConfigResponse>('outCache'),
+          ]);
+
+          if (dailyConfigs.every(c => !c)) {
+            return InteractionResponse({
+              type: InteractionResponseType.ChannelMessageWithSource,
+              data: { content: 'No configurations to publish' },
+            });
+          }
+
+          content += 'The following are the current configurations:\n\n';
+
+          for (let i = 0; i < 3; i++) {
+            const c = dailyConfigs[i];
+            if (!c) continue;
+            content += `For **${last3IsoDates[i]}**\n`;
+            // Check for changes
+            const prevC = prevConfig?.dailiesMap[last3IsoDates[i]];
+            if (c.memory !== undefined) {
+              content += 'Memory: ';
+              if (prevC && prevC.memory !== undefined && c.memory !== prevC.memory) {
+                content += formatField('memory', prevC.memory) + ' -> ';
+              }
+              content += formatField('memory', c.memory) + '\n';
+            }
+            if (c.variation !== undefined) {
+              content += 'Variation: ';
+              if (prevC && prevC.variation !== undefined && c.variation !== prevC.variation) {
+                content += formatField('variation', prevC.variation) + ' -> ';
+              }
+              content += formatField('variation', c.variation) + '\n';
+            }
+            if (c.overrideReason !== undefined) {
+              content += 'Override Reason: ';
+              if (prevC && prevC.overrideReason !== undefined && c.overrideReason !== prevC.overrideReason) {
+                content += formatField('overrideReason', prevC.overrideReason) + ' -> ';
+              }
+              content += formatField('overrideReason', c.overrideReason) + '\n';
+            }
+            if (c.override !== undefined) {
+              content += 'Override: ';
+              if (prevC && prevC.override !== undefined && c.override !== prevC.override) {
+                content += formatField('override', prevC.override) + ' -> ';
+              }
+              content += formatField('override', c.override) + '\n';
+            }
+
+            content += '\n';
+          }
+
+          content += '\nDo you want to publish these configurations?';
 
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
             data: {
               content,
-              allowed_mentions: { users: ['702740689846272002'] },
+              allowed_mentions: prevConfirmingUser ? { users: [prevConfirmingUser] } : undefined,
               components: [
                 {
                   type: ComponentType.ActionRow,
                   components: [
                     new ButtonBuilder()
-                      .setCustomId('publish_with_rescan_confirm')
+                      .setCustomId('publish_confirm')
                       .setLabel('Confirm')
                       .setStyle(ButtonStyle.Success)
                       .toJSON(),
@@ -466,306 +538,226 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           });
         }
 
-        const last3IsoDates = Array.from({ length: 3 }, (_, i) => DateTime.now().minus({ days: i }).toISODate());
-        const [dailyConfigs, prevConfig] = await Promise.all([
-          Promise.all(last3IsoDates.map(date => getParsedDailyConfig(redis, date))),
-          redis.get<RemoteConfigResponse>('outCache'),
-        ]);
+        if (name === 'set_daily') {
+          let date = DateTime.now().setZone('America/Los_Angeles').startOf('day');
+          const dateInput = optionsMap.get('date') as APIApplicationCommandInteractionDataStringOption | undefined;
 
-        if (dailyConfigs.every(c => !c)) {
+          if (dateInput) {
+            // Verify Date
+            let dateIn = DateTime.fromISO(dateInput.value, { zone: 'America/Los_Angeles' });
+            if (!dateIn.isValid) {
+              // Check if the date is relative
+              const relative = parseInt(dateInput.value);
+              if (!isNaN(relative)) {
+                dateIn = date.plus({ days: relative });
+              } else {
+                return InteractionResponse({
+                  type: InteractionResponseType.ChannelMessageWithSource,
+                  data: { content: 'Invalid date' },
+                });
+              }
+            }
+
+            // Cannot be 3 day in the past
+            if (dateIn < DateTime.now().minus({ days: 3 }) && !isSuperUser) {
+              return InteractionResponse({
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: {
+                  content: 'Only specified user can configure for dates older than 3 days',
+                  flags: MessageFlags.SuppressNotifications,
+                },
+              });
+            }
+            date = dateIn;
+          }
+
+          if (optionsMap.size <= (dateInput ? 1 : 0)) {
+            return InteractionResponse({
+              type: InteractionResponseType.ChannelMessageWithSource,
+              data: { content: 'Nothing to set' },
+            });
+          }
+
+          // TODO: Fetch Overrides and pass it to getShardInfo
+          const shardInfo = getShardInfo(date);
+          const edits: Parameters<typeof setDailyConfig>[2] = {};
+          let editStr = `For ${date.toISODate()}\n\n`;
+          const components: APIActionRowComponent<APIMessageActionRowComponent>[] = [];
+
+          if (optionsMap.has('memory')) {
+            const memOpt = optionsMap.get('memory') as APIApplicationCommandInteractionDataNumberOption;
+            if (!shardInfo.hasShard) {
+              editStr += 'Memories can only be set on days with shards\n';
+            } else if (!shardInfo.isRed) {
+              editStr += 'Memories can only be set on Red days\n';
+            } else if (memOpt.value === -1) {
+              edits.memory = null;
+              editStr += 'Memory removed\n';
+            } else {
+              edits.memory = memOpt.value;
+              editStr += 'Memory set as `' + formatField('memory', memOpt.value) + '`\n';
+            }
+          }
+
+          if (optionsMap.has('variation')) {
+            const variOpt = optionsMap.get('variation') as APIApplicationCommandInteractionDataNumberOption;
+            if (!shardInfo.hasShard) {
+              editStr += 'Variations can only be set on days with shards\n';
+            } else {
+              const maxVariants = numMapVarients[shardInfo.map as keyof typeof numMapVarients];
+              if (!maxVariants) {
+                editStr += `There is only 1 variant for ${stringsEn.skyMaps[shardInfo.map as keyof typeof stringsEn.skyMaps]}, no need to set\n`;
+              } else if (variOpt.value >= maxVariants) {
+                editStr += `There is only ${maxVariants} variants for ${stringsEn.skyMaps[shardInfo.map as keyof typeof stringsEn.skyMaps]}\n`;
+              } else if (variOpt.value === -1) {
+                edits.variation = null;
+                editStr += 'Variation removed\n';
+              } else if (variOpt.value === -2) {
+                components.push({
+                  type: ComponentType.ActionRow,
+                  components: [
+                    new StringSelectMenuBuilder()
+                      .setCustomId(`variation_${date.toISODate()}`)
+                      .setPlaceholder('Select a variation')
+                      .addOptions(
+                        Array.from({ length: maxVariants }, (_, i) => {
+                          const tag = `${shardInfo.map}.${i}` as keyof typeof stringsEn.skyMapVariants;
+                          return {
+                            label: stringsEn.skyMapVariants[tag],
+                            value: i.toString(),
+                          };
+                        }),
+                      )
+                      .toJSON(),
+                  ],
+                });
+              } else {
+                edits.variation = variOpt.value;
+                const varientTag = `${shardInfo.map}.${variOpt.value}` as keyof typeof stringsEn.skyMapVariants;
+                const previewInfographic = `https://v8.sky-shards.pages.dev/infographics/map_varient_clement/${varientTag}.webp`;
+                const varientDesc = stringsEn.skyMapVariants[varientTag];
+                editStr += `Variation set as ${formatField('variation', variOpt.value)}, [${varientDesc}](${previewInfographic})\n`;
+              }
+            }
+          }
+
+          let isOverriding = optionsMap.has('override_reason_key') || optionsMap.has('override_reason');
+          if (isOverriding) {
+            if (optionsMap.has('override_reason_key')) {
+              const reasonKeyOpt = optionsMap.get(
+                'override_reason_key',
+              ) as APIApplicationCommandInteractionDataStringOption;
+              edits.overrideReason = reasonKeyOpt.value;
+              editStr +=
+                'Override reason set as `' +
+                commonOverrideReasons[reasonKeyOpt.value as keyof typeof commonOverrideReasons] +
+                '`\n';
+            } else {
+              const reasonOpt = optionsMap.get('override_reason') as APIApplicationCommandInteractionDataStringOption;
+              edits.overrideReason = '!!!' + reasonOpt.value; // Prefix with !!! to indicate custom reason
+              editStr += 'Override reason set as `' + reasonOpt.value + '`\n';
+            }
+          }
+
+          if (optionsMap.has('clear_override')) {
+            edits.override = null;
+            edits.overrideReason = null;
+            editStr += 'Override cleared\n';
+            if (isOverriding) {
+              isOverriding = false;
+              editStr == '-- `clear_override` is used, override reason is ignored\n';
+            }
+          }
+
+          await Promise.all([
+            setDailyConfig(redis, date, edits, member.user.id),
+            pushAuthorName(redis, member.user.id, resovledName),
+            // InteractionCallback(discordRest, interaction),
+          ]);
+
+          if (optionsMap.has('override_reason_key') || optionsMap.has('override_reason')) {
+            context.waitUntil(
+              discordRest.post(Routes.webhook(context.env.DISCORD_CLIENT_ID, interaction.token), {
+                body: generateOverwriteMenu(date),
+              }),
+            );
+          }
+
+          editStr += '\n\nRemember to </publish:1219872570669531247> the after your changes are completed';
+
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'No configurations to publish' },
+            data: { content: editStr, components },
           });
         }
 
-        content += 'The following are the current configurations:\n\n';
-
-        for (let i = 0; i < 3; i++) {
-          const c = dailyConfigs[i];
-          if (!c) continue;
-          content += `For **${last3IsoDates[i]}**\n`;
-          // Check for changes
-          const prevC = prevConfig?.dailiesMap[last3IsoDates[i]];
-          if (c.memory !== undefined) {
-            content += 'Memory: ';
-            if (prevC && prevC.memory !== undefined && c.memory !== prevC.memory) {
-              content += formatField('memory', prevC.memory) + ' -> ';
-            }
-            content += formatField('memory', c.memory) + '\n';
-          }
-          if (c.variation !== undefined) {
-            content += 'Variation: ';
-            if (prevC && prevC.variation !== undefined && c.variation !== prevC.variation) {
-              content += formatField('variation', prevC.variation) + ' -> ';
-            }
-            content += formatField('variation', c.variation) + '\n';
-          }
-          if (c.overrideReason !== undefined) {
-            content += 'Override Reason: ';
-            if (prevC && prevC.overrideReason !== undefined && c.overrideReason !== prevC.overrideReason) {
-              content += formatField('overrideReason', prevC.overrideReason) + ' -> ';
-            }
-            content += formatField('overrideReason', c.overrideReason) + '\n';
-          }
-          if (c.override !== undefined) {
-            content += 'Override: ';
-            if (prevC && prevC.override !== undefined && c.override !== prevC.override) {
-              content += formatField('override', prevC.override) + ' -> ';
-            }
-            content += formatField('override', c.override) + '\n';
-          }
-
-          content += '\n';
-        }
-
-        content += '\nDo you want to publish these configurations?';
-
-        return InteractionResponse({
-          type: InteractionResponseType.ChannelMessageWithSource,
-          data: {
-            content,
-            allowed_mentions: prevConfirmingUser ? { users: [prevConfirmingUser] } : undefined,
-            components: [
-              {
-                type: ComponentType.ActionRow,
-                components: [
-                  new ButtonBuilder()
-                    .setCustomId('publish_confirm')
-                    .setLabel('Confirm')
-                    .setStyle(ButtonStyle.Success)
-                    .toJSON(),
-                  new ButtonBuilder()
-                    .setCustomId('publish_cancel')
-                    .setLabel('Cancel')
-                    .setStyle(ButtonStyle.Danger)
-                    .toJSON(),
-                ],
-              },
-            ],
-          },
-        });
-      }
-
-      if (name === 'set_daily') {
-        let date = DateTime.now().setZone('America/Los_Angeles').startOf('day');
-        const dateInput = optionsMap.get('date') as APIApplicationCommandInteractionDataStringOption | undefined;
-
-        if (dateInput) {
-          // Verify Date
-          let dateIn = DateTime.fromISO(dateInput.value, { zone: 'America/Los_Angeles' });
-          if (!dateIn.isValid) {
-            // Check if the date is relative
-            const relative = parseInt(dateInput.value);
-            if (!isNaN(relative)) {
-              dateIn = date.plus({ days: relative });
-            } else {
-              return InteractionResponse({
-                type: InteractionResponseType.ChannelMessageWithSource,
-                data: { content: 'Invalid date' },
-              });
-            }
-          }
-
-          // Cannot be 3 day in the past
-          if (dateIn < DateTime.now().minus({ days: 3 }) && !isSuperUser) {
+        if (name === 'set_warning') {
+          if (!isPlutoy) {
             return InteractionResponse({
               type: InteractionResponseType.ChannelMessageWithSource,
               data: {
-                content: 'Only specified user can configure for dates older than 3 days',
+                content: 'Only Plutoy can set warnings',
                 flags: MessageFlags.SuppressNotifications,
               },
             });
           }
-          date = dateIn;
-        }
 
-        if (optionsMap.size <= (dateInput ? 1 : 0)) {
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'Nothing to set' },
-          });
-        }
+          const typeOpt = optionsMap.get('type') as APIApplicationCommandInteractionDataStringOption;
+          const type = typeOpt.value as keyof typeof warnings;
 
-        // TODO: Fetch Overrides and pass it to getShardInfo
-        const shardInfo = getShardInfo(date);
-        const edits: Parameters<typeof setDailyConfig>[2] = {};
-        let editStr = `For ${date.toISODate()}\n\n`;
-        const components: APIActionRowComponent<APIMessageActionRowComponent>[] = [];
-
-        if (optionsMap.has('memory')) {
-          const memOpt = optionsMap.get('memory') as APIApplicationCommandInteractionDataNumberOption;
-          if (!shardInfo.hasShard) {
-            editStr += 'Memories can only be set on days with shards\n';
-          } else if (!shardInfo.isRed) {
-            editStr += 'Memories can only be set on Red days\n';
-          } else if (memOpt.value === -1) {
-            edits.memory = null;
-            editStr += 'Memory removed\n';
-          } else {
-            edits.memory = memOpt.value;
-            editStr += 'Memory set as `' + formatField('memory', memOpt.value) + '`\n';
+          const linkOpt = optionsMap.get('link') as APIApplicationCommandInteractionDataStringOption;
+          if (type && !linkOpt) {
+            return InteractionResponse({
+              type: InteractionResponseType.ChannelMessageWithSource,
+              data: { content: 'Link is required for warnings' },
+            });
           }
-        }
 
-        if (optionsMap.has('variation')) {
-          const variOpt = optionsMap.get('variation') as APIApplicationCommandInteractionDataNumberOption;
-          if (!shardInfo.hasShard) {
-            editStr += 'Variations can only be set on days with shards\n';
-          } else {
-            const maxVariants = numMapVarients[shardInfo.map as keyof typeof numMapVarients];
-            if (!maxVariants) {
-              editStr += `There is only 1 variant for ${stringsEn.skyMaps[shardInfo.map as keyof typeof stringsEn.skyMaps]}, no need to set\n`;
-            } else if (variOpt.value >= maxVariants) {
-              editStr += `There is only ${maxVariants} variants for ${stringsEn.skyMaps[shardInfo.map as keyof typeof stringsEn.skyMaps]}\n`;
-            } else if (variOpt.value === -1) {
-              edits.variation = null;
-              editStr += 'Variation removed\n';
-            } else if (variOpt.value === -2) {
-              components.push({
-                type: ComponentType.ActionRow,
-                components: [
-                  new StringSelectMenuBuilder()
-                    .setCustomId(`variation_${date.toISODate()}`)
-                    .setPlaceholder('Select a variation')
-                    .addOptions(
-                      Array.from({ length: maxVariants }, (_, i) => {
-                        const tag = `${shardInfo.map}.${i}` as keyof typeof stringsEn.skyMapVariants;
-                        return {
-                          label: stringsEn.skyMapVariants[tag],
-                          value: i.toString(),
-                        };
-                      }),
-                    )
-                    .toJSON(),
-                ],
-              });
-            } else {
-              edits.variation = variOpt.value;
-              const varientTag = `${shardInfo.map}.${variOpt.value}` as keyof typeof stringsEn.skyMapVariants;
-              const previewInfographic = `https://v8.sky-shards.pages.dev/infographics/map_varient_clement/${varientTag}.webp`;
-              const varientDesc = stringsEn.skyMapVariants[varientTag];
-              editStr += `Variation set as ${formatField('variation', variOpt.value)}, [${varientDesc}](${previewInfographic})\n`;
-            }
-          }
-        }
+          await setWarning(redis, type, linkOpt.value);
 
-        let isOverriding = optionsMap.has('override_reason_key') || optionsMap.has('override_reason');
-        if (isOverriding) {
-          if (optionsMap.has('override_reason_key')) {
-            const reasonKeyOpt = optionsMap.get(
-              'override_reason_key',
-            ) as APIApplicationCommandInteractionDataStringOption;
-            edits.overrideReason = reasonKeyOpt.value;
-            editStr +=
-              'Override reason set as `' +
-              commonOverrideReasons[reasonKeyOpt.value as keyof typeof commonOverrideReasons] +
-              '`\n';
-          } else {
-            const reasonOpt = optionsMap.get('override_reason') as APIApplicationCommandInteractionDataStringOption;
-            edits.overrideReason = '!!!' + reasonOpt.value; // Prefix with !!! to indicate custom reason
-            editStr += 'Override reason set as `' + reasonOpt.value + '`\n';
-          }
-        }
-
-        if (optionsMap.has('clear_override')) {
-          edits.override = null;
-          edits.overrideReason = null;
-          editStr += 'Override cleared\n';
-          if (isOverriding) {
-            isOverriding = false;
-            editStr == '-- `clear_override` is used, override reason is ignored\n';
-          }
-        }
-
-        await Promise.all([
-          setDailyConfig(redis, date, edits, member.user.id),
-          pushAuthorName(redis, member.user.id, resovledName),
-          // InteractionCallback(discordRest, interaction),
-        ]);
-
-        if (optionsMap.has('override_reason_key') || optionsMap.has('override_reason')) {
           context.waitUntil(
-            discordRest.post(Routes.webhook(context.env.DISCORD_CLIENT_ID, interaction.token), {
-              body: generateOverwriteMenu(date),
+            fetch(context.env.CLOUDFLARE_DEPLOY_URL, {
+              method: 'POST',
             }),
           );
-        }
 
-        editStr += '\n\nRemember to </publish:1219872570669531247> the after your changes are completed';
-
-        return InteractionResponse({
-          type: InteractionResponseType.ChannelMessageWithSource,
-          data: { content: editStr, components },
-        });
-      }
-
-      if (name === 'set_warning') {
-        if (!isPlutoy) {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
             data: {
-              content: 'Only Plutoy can set warnings',
-              flags: MessageFlags.SuppressNotifications,
+              content:
+                'Warning set as `' +
+                warnings[type] +
+                '`\nMore information link to <' +
+                linkOpt.value +
+                '>\nAuto publishing...',
             },
           });
         }
 
-        const typeOpt = optionsMap.get('type') as APIApplicationCommandInteractionDataStringOption;
-        const type = typeOpt.value as keyof typeof warnings;
+        if (name === 'clear_warning') {
+          if (!isPlutoy) {
+            return InteractionResponse({
+              type: InteractionResponseType.ChannelMessageWithSource,
+              data: {
+                content: 'Only Plutoy can clear warnings',
+                flags: MessageFlags.SuppressNotifications,
+              },
+            });
+          }
 
-        const linkOpt = optionsMap.get('link') as APIApplicationCommandInteractionDataStringOption;
-        if (type && !linkOpt) {
+          await clearWarning(redis);
+
+          context.waitUntil(
+            fetch(context.env.CLOUDFLARE_DEPLOY_URL, {
+              method: 'POST',
+            }),
+          );
+
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
-            data: { content: 'Link is required for warnings' },
+            data: { content: 'Warning cleared\nAuto publishing...' },
           });
         }
-
-        await setWarning(redis, type, linkOpt.value);
-
-        context.waitUntil(
-          fetch(context.env.CLOUDFLARE_DEPLOY_URL, {
-            method: 'POST',
-          }),
-        );
-
-        return InteractionResponse({
-          type: InteractionResponseType.ChannelMessageWithSource,
-          data: {
-            content:
-              'Warning set as `' +
-              warnings[type] +
-              '`\nMore information link to <' +
-              linkOpt.value +
-              '>\nAuto publishing...',
-          },
-        });
-      }
-
-      if (name === 'clear_warning') {
-        if (!isPlutoy) {
-          return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: {
-              content: 'Only Plutoy can clear warnings',
-              flags: MessageFlags.SuppressNotifications,
-            },
-          });
-        }
-
-        await clearWarning(redis);
-
-        context.waitUntil(
-          fetch(context.env.CLOUDFLARE_DEPLOY_URL, {
-            method: 'POST',
-          }),
-        );
-
-        return InteractionResponse({
-          type: InteractionResponseType.ChannelMessageWithSource,
-          data: { content: 'Warning cleared\nAuto publishing...' },
-        });
       }
 
       if (name === 'remind_me') {
@@ -797,6 +789,11 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           },
         });
       }
+
+      return InteractionResponse({
+        type: InteractionResponseType.ChannelMessageWithSource,
+        data: { content: `Unknown command: ${name} for <#${channel?.id}>` },
+      });
     }
   } else if (interaction.type === InteractionType.MessageComponent) {
     const custom_id = interaction.data.custom_id;
