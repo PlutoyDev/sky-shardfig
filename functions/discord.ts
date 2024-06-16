@@ -879,17 +879,21 @@ export const onRequestPost: PagesFunction<Env> = async context => {
       }
       const variOpt = interaction.data.values[0];
       const variation = parseInt(variOpt);
-      await Promise.all([
-        setDailyConfig(redis, date, { variation }, member.user.id),
-        InteractionCallback(discordRest, interaction, {
-          type: InteractionResponseType.UpdateMessage,
-          data: { components: [] },
-        }),
-      ]);
+
+      setDailyConfig(redis, date, { variation }, member.user.id);
+
+      // interaction.message.content
+      const rememberWordIndex = interaction.message.content.indexOf('Remember');
+      const newContent =
+        interaction.message.content.slice(0, rememberWordIndex - 2) +
+        'Variation set as ' +
+        formatField('variation', variation) +
+        '\n\n' +
+        interaction.message.content.slice(rememberWordIndex);
 
       return InteractionResponse({
-        type: InteractionResponseType.ChannelMessageWithSource,
-        data: { content: `For ${date.toISODate()}\nVariation set as ${variation}`, components: [] },
+        type: InteractionResponseType.UpdateMessage,
+        data: { content: newContent, embeds: [], components: [] },
       });
     }
   }
