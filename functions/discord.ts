@@ -56,6 +56,8 @@ interface Env {
   DISCORD_BOT_TOKEN: string;
   CLOUDFLARE_DEPLOY_URL: string;
   DISABLE_PUBLISHED: string | undefined;
+  CLOUDFLARE_ACCOUNT_ID: string;
+  CLOUDFLARE_API_TOKEN: string;
 }
 // Environment variables are injected at build time, so cannot destructured, cannot access with []
 
@@ -895,6 +897,50 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         type: InteractionResponseType.UpdateMessage,
         data: { content: newContent, embeds: [], components: [] },
       });
+    } else if (custom_id.startsWith('rollback_')) {
+      const deployId = custom_id.slice(9);
+      if (!isPlutoy) {
+        return InteractionResponse({
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: {
+            content: 'Only Plutoy can perform a rollback',
+            flags: MessageFlags.SuppressNotifications,
+          },
+        });
+      }
+      const rollbackUrl = `https://api.cloudflare.com/client/v4/accounts/${context.env.CLOUDFLARE_ACCOUNT_ID}/pages/projects/sky-shardfig/deployments/${deployId}/rollback`;
+      const res = await fetch(rollbackUrl, {
+        method: 'POST',
+        headers: {
+          'X-Auth-Key': context.env.CLOUDFLARE_API_TOKEN,
+        },
+      });
+
+      interface RollbackResponse {
+        errors: { code: number; message: string }[];
+        messages: { code: number; message: string }[];
+        success: boolean;
+      }
+
+      const resBody = (await res.json()) as RollbackResponse;
+      if (resBody.success) {
+        return InteractionResponse({
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: {
+            content:
+              'Rollback successful: \n' +
+              resBody.messages.map(m => 'Code: ' + m.code + ', Message: ' + m.message).join('\n'),
+          },
+        });
+      } else {
+        return InteractionResponse({
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: {
+            content:
+              'Rollback failed: \n' + resBody.errors.map(e => 'Code: ' + e.code + ', Message: ' + e.message).join('\n'),
+          },
+        });
+      }
     }
   }
 

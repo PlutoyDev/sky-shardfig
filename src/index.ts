@@ -2,10 +2,10 @@ import { REST } from '@discordjs/rest';
 import { Redis } from '@upstash/redis';
 import axios from 'axios';
 import {
+  ComponentType,
   MessageFlags,
   RESTPatchAPIInteractionOriginalResponseJSONBody,
   RESTPostAPIWebhookWithTokenJSONBody,
-  RESTPostAPIWebhookWithTokenResult,
   RESTPostAPIWebhookWithTokenWaitResult,
   Routes,
 } from 'discord-api-types/v10';
@@ -187,12 +187,30 @@ try {
   log('Published config');
   log('Config ID: ' + remoteConfigOut.id);
 
+  const deployId = process.env.CF_PAGES_URL?.split('.')?.[0];
+
   // Edit the webhook message to include the logs
   await axios.patch(process.env.DISCORD_WEBHOOK_URL + '/messages/' + webhookMessageId, {
     content:
       'Configuration published\n\n```' +
       logs.join('\n') +
-      '```\n\n[View raw config](https://sky-shardfig.plutoy.top/minified.json)',
+      '```\n' +
+      '```json\n' +
+      JSON.stringify(remoteConfigOut, null, 2) +
+      '\n```',
+    components: [
+      {
+        type: ComponentType.ActionRow,
+        components: [
+          {
+            type: ComponentType.Button,
+            label: 'Rollback to this',
+            style: 1,
+            custom_id: 'rollback_' + deployId,
+          },
+        ],
+      },
+    ],
   } satisfies RESTPatchAPIInteractionOriginalResponseJSONBody);
 } catch (err) {
   errorLog('Failed to publish config', err);
