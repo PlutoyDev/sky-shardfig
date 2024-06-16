@@ -607,15 +607,17 @@ export const onRequestPost: PagesFunction<Env> = async context => {
             const maxVariants = numMapVarients[shardInfo.map as keyof typeof numMapVarients];
             if (!maxVariants) {
               editStr += `There is only 1 variant for ${stringsEn.skyMaps[shardInfo.map as keyof typeof stringsEn.skyMaps]}, no need to set\n`;
-            } else if (variOpt.value > maxVariants) {
+            } else if (variOpt.value >= maxVariants) {
               editStr += `There is only ${maxVariants} variants for ${stringsEn.skyMaps[shardInfo.map as keyof typeof stringsEn.skyMaps]}\n`;
             } else if (variOpt.value === -1) {
               edits.variation = null;
               editStr += 'Variation removed\n';
             } else {
               edits.variation = variOpt.value;
-              const previewInfographic = `https://v8.sky-shards.pages.dev/infographics/map_varient_clement/${shardInfo.map}.${variOpt.value}.webp`;
-              editStr += `Variation set as [${formatField('variation', variOpt.value)}](${previewInfographic})\n`;
+              const varientTag = `${shardInfo.map}.${variOpt.value}` as keyof typeof stringsEn.skyMapVariants;
+              const previewInfographic = `https://v8.sky-shards.pages.dev/infographics/map_varient_clement/${varientTag}.webp`;
+              const varientDesc = stringsEn.skyMapVariants[varientTag];
+              editStr += `Variation set as ${formatField('variation', variOpt.value)}, [${varientDesc}](${previewInfographic})\n`;
             }
           }
         }

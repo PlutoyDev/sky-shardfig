@@ -53,6 +53,47 @@ export const stringsEn = {
     'vault.starlight': 'Starlight Desert',
     'vault.jelly': 'Jellyfish Cove',
   },
+  skyMapVariants: {
+    'prairie.butterfly.0': 'On top of the dome',
+    'prairie.butterfly.1': 'Leaning to the left side',
+    'prairie.butterfly.2': 'Leaning to the right side',
+    'prairie.village.0': 'On the center island',
+    'prairie.village.1': 'Left of Koi Pond',
+    'prairie.village.2': 'Right of Koi Pond',
+    'prairie.bird.0': 'On the sloped island',
+    'prairie.bird.1': 'Beside the lower ruins',
+    'prairie.island.0': 'Next to manta statues',
+    'prairie.island.1': 'Near turtle island',
+    'prairie.island.2': 'Near the waterfall',
+    'forest.brook.0': 'Right of exit',
+    'forest.brook.1': 'Outside of pipes',
+    'forest.end.0': 'Left from exit of temple',
+    'forest.end.1': 'Far right of temple',
+    'valley.rink.0': 'Far left from entrance',
+    'valley.rink.1': 'Near exit to sliding race',
+    'valley.rink.2': 'Left from the entrance',
+    'valley.dreams.0': 'Smaller ice rink',
+    'valley.dreams.1': "Close to Dream's Guide",
+    'waseland.temple.0': 'Center of the area',
+    'wasteland.temple.1': 'Far left of the area',
+    'wasteland.temple.2': 'Far right of the area',
+    'wasteland.battlefield.0': 'Front-left of the center ruins',
+    'wasteland.battlefield.1': 'Front-right of the center ruins',
+    'wasteland.battlefield.2': 'Back-left of the center ruins',
+    'wasteland.graveyard.0': 'Right of entrance of the area',
+    'wasteland.graveyard.1': 'Left of exit to battlefield',
+    'wasteland.crab.0': 'Far right from the entrance perspective',
+    'wasteland.crab.1': 'Left from the entrance perspective',
+    'wasteland.ark.0': 'Close to the pond',
+    'wasteland.ark.1': 'Exit of crab cave',
+    'wasteland.ark.2': 'Beside the half-buried ship',
+    'wasteland.ark.3': 'Beside the farm',
+    'vault.starlight.0': 'Next to the rose',
+    'vault.starlight.1': 'Close to the exit towards Jellyfish Cove',
+    'vault.starlight.2': 'Right of rose garden',
+    'vault.jelly.0': 'Near the entrance',
+    'vault.jelly.1': 'Near the deck',
+  },
 };
 
 export const realms = ['prairie', 'forest', 'valley', 'wasteland', 'vault'] as const;
@@ -253,7 +294,7 @@ export const warnings = {
 type Warning = keyof typeof warnings;
 
 export async function getWarning(redis: Redis) {
-  const [warning, warningLink] = await redis.mget('warnings', 'warning_link') as [Warning | null, string];
+  const [warning, warningLink] = (await redis.mget('warnings', 'warning_link')) as [Warning | null, string];
   if (!warning || !warningLink) return null;
   return { warning, warningLink };
 }
