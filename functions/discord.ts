@@ -510,17 +510,23 @@ export const onRequestPost: PagesFunction<Env> = async context => {
       }
 
       if (name === 'set_daily') {
-        let date = DateTime.now().setZone('America/Los_Angeles');
+        let date = DateTime.now().setZone('America/Los_Angeles').startOf('day');
         const dateInput = optionsMap.get('date') as APIApplicationCommandInteractionDataStringOption | undefined;
 
         if (dateInput) {
           // Verify Date
-          const dateIn = DateTime.fromISO(dateInput.value, { zone: 'America/Los_Angeles' });
+          let dateIn = DateTime.fromISO(dateInput.value, { zone: 'America/Los_Angeles' });
           if (!dateIn.isValid) {
-            return InteractionResponse({
-              type: InteractionResponseType.ChannelMessageWithSource,
-              data: { content: 'Invalid date' },
-            });
+            // Check if the date is relative
+            const relative = parseInt(dateInput.value);
+            if (!isNaN(relative)) {
+              dateIn = date.plus({ days: relative });
+            } else {
+              return InteractionResponse({
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: { content: 'Invalid date' },
+              });
+            }
           }
 
           // Cannot be 3 day in the past

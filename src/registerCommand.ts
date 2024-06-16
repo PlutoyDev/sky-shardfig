@@ -37,7 +37,9 @@ try {
           }),
       )
       .addStringOption(option =>
-        option.setName('date').setDescription('Date of the config (YYYY-MM-DD, default today)'),
+        option
+          .setName('date')
+          .setDescription('Date of the config (YYYY-MM-DD, default today, or relative input like -1, -2)'),
       )
       .addStringOption(option =>
         option
