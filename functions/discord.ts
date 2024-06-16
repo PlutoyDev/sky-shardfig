@@ -976,6 +976,15 @@ export const onRequestPost: PagesFunction<Env> = async context => {
       const date = DateTime.fromISO(custom_id.slice(7), { zone: 'America/Los_Angeles' });
       const shardInfo = getShardInfo(date);
 
+      if (!shardInfo.hasShard) {
+        return InteractionResponse({
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: {
+            content: 'There is no shard for ' + date.toISODate(),
+          },
+        });
+      }
+
       const remindDT = shardInfo.occurrences.find(o => o.land > DateTime.now())?.land;
 
       if (!remindDT) {
