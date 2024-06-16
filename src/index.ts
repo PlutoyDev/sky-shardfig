@@ -187,7 +187,7 @@ try {
   log('Published config');
   log('Config ID: ' + remoteConfigOut.id);
 
-  const deployId = process.env.CF_PAGES_URL?.split('.')?.[0];
+  const deployId = process.env.CF_PAGES_URL ? new URL(process.env.CF_PAGES_URL).hostname.split('.')[0] : undefined;
 
   log('Deploy ID: ' + deployId);
 
