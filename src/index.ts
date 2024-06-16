@@ -189,6 +189,8 @@ try {
 
   const deployId = process.env.CF_PAGES_URL?.split('.')?.[0];
 
+  log('Deploy ID: ' + deployId);
+
   // Edit the webhook message to include the logs
   await axios.patch(process.env.DISCORD_WEBHOOK_URL + '/messages/' + webhookMessageId, {
     content:
@@ -204,7 +206,7 @@ try {
         components: [
           {
             type: ComponentType.Button,
-            label: 'Rollback to this',
+            label: 'Rollback',
             style: 1,
             custom_id: 'rollback_' + deployId,
           },
