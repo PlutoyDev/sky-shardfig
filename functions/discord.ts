@@ -622,7 +622,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
                 type: ComponentType.ActionRow,
                 components: [
                   new StringSelectMenuBuilder()
-                    .setCustomId(`set_daily_variation_${date.toISODate()}`)
+                    .setCustomId(`variation_${date.toISODate()}`)
                     .setPlaceholder('Select a variation')
                     .addOptions(
                       Array.from({ length: maxVariants }, (_, i) => {
@@ -872,17 +872,24 @@ export const onRequestPost: PagesFunction<Env> = async context => {
       } else {
         throw new Error('Unknown component type: ' + interaction.data.component_type);
       }
-    } else if (custom_id.startsWith('set_daily_variation_')) {
-      const date = DateTime.fromISO(custom_id.slice(18), { zone: 'America/Los_Angeles' });
+    } else if (custom_id.startsWith('variation_')) {
+      const date = DateTime.fromISO(custom_id.slice(10), { zone: 'America/Los_Angeles' });
       if (interaction.data.component_type !== ComponentType.StringSelect) {
         throw new Error('Unknown component type: ' + interaction.data.component_type);
       }
       const variOpt = interaction.data.values[0];
       const variation = parseInt(variOpt);
-      await setDailyConfig(redis, date, { variation }, member.user.id);
+      await Promise.all([
+        setDailyConfig(redis, date, { variation }, member.user.id),
+        InteractionCallback(discordRest, interaction, {
+          type: InteractionResponseType.UpdateMessage,
+          data: { components: [] },
+        }),
+      ]);
+
       return InteractionResponse({
-        type: InteractionResponseType.UpdateMessage,
-        data: { content: 'Variation set as ' + variation, embeds: [], components: [] },
+        type: InteractionResponseType.ChannelMessageWithSource,
+        data: { content: `For ${date.toISODate()}\nVariation set as ${variation}`, components: [] },
       });
     }
   }
