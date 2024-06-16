@@ -21,6 +21,8 @@ import {
   Routes,
   APIBaseComponent,
   APIMessageComponent,
+  APIActionRowComponent,
+  APIMessageActionRowComponent,
 } from 'discord-api-types/v10';
 import { DateTime } from 'luxon';
 import nacl from 'tweetnacl';
@@ -585,7 +587,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         const shardInfo = getShardInfo(date);
         const edits: Parameters<typeof setDailyConfig>[2] = {};
         let editStr = `For ${date.toISODate()}\n\n`;
-        const components: APIMessageComponent[] = [];
+        const components: APIActionRowComponent<APIMessageActionRowComponent>[] = [];
 
         if (optionsMap.has('memory')) {
           const memOpt = optionsMap.get('memory') as APIApplicationCommandInteractionDataNumberOption;
@@ -616,21 +618,24 @@ export const onRequestPost: PagesFunction<Env> = async context => {
               edits.variation = null;
               editStr += 'Variation removed\n';
             } else if (variOpt.value === -2) {
-              components.push(
-                new StringSelectMenuBuilder()
-                  .setCustomId(`set_daily_variation_${date.toISODate()}`)
-                  .setPlaceholder('Select a variation')
-                  .addOptions(
-                    Array.from({ length: maxVariants }, (_, i) => {
-                      const tag = `${shardInfo.map}.${i}` as keyof typeof stringsEn.skyMapVariants;
-                      return {
-                        label: stringsEn.skyMapVariants[tag],
-                        value: i.toString(),
-                      };
-                    }),
-                  )
-                  .toJSON(),
-              );
+              components.push({
+                type: ComponentType.ActionRow,
+                components: [
+                  new StringSelectMenuBuilder()
+                    .setCustomId(`set_daily_variation_${date.toISODate()}`)
+                    .setPlaceholder('Select a variation')
+                    .addOptions(
+                      Array.from({ length: maxVariants }, (_, i) => {
+                        const tag = `${shardInfo.map}.${i}` as keyof typeof stringsEn.skyMapVariants;
+                        return {
+                          label: stringsEn.skyMapVariants[tag],
+                          value: i.toString(),
+                        };
+                      }),
+                    )
+                    .toJSON(),
+                ],
+              });
             } else {
               edits.variation = variOpt.value;
               const varientTag = `${shardInfo.map}.${variOpt.value}` as keyof typeof stringsEn.skyMapVariants;
@@ -687,7 +692,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
         return InteractionResponse({
           type: InteractionResponseType.ChannelMessageWithSource,
-          data: { content: editStr },
+          data: { content: editStr, components },
         });
       }
 
