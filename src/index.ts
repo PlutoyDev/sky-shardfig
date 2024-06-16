@@ -119,17 +119,17 @@ try {
   log('Creating response object');
 
   const dailiesMap: Record<string, DailyConfig> = {};
+
+  if (prevResponse) {
+    Object.assign(dailiesMap, prevResponse.dailiesMap);
+  }
+
   fetchDates.forEach((date, i) => {
     const daily = dailies[i];
     if (daily) {
       dailiesMap[date] = daily;
     }
   });
-
-  if (prevResponse) {
-    log('Merging previous response');
-    Object.assign(dailiesMap, prevResponse.dailiesMap);
-  }
 
   const remoteConfigOut: RemoteConfigResponse = {
     authorNames,
