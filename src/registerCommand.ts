@@ -31,10 +31,17 @@ try {
         option
           .setName('variation')
           .setDescription('Set the variation for the day')
-          .setChoices(...Array.from({ length: 4 }, (_, i) => ({ name: `Variation ${i + 1}`, value: i })), {
-            name: 'Remove',
-            value: -1,
-          }),
+          .setChoices(
+            ...Array.from({ length: 4 }, (_, i) => ({ name: `Variation ${i + 1}`, value: i })),
+            {
+              name: 'Remove',
+              value: -1,
+            },
+            {
+              name: 'Dropdown',
+              value: -2,
+            },
+          ),
       )
       .addStringOption(option =>
         option
