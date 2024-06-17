@@ -906,29 +906,45 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         throw new Error('Unknown component type: ' + interaction.data.component_type);
       }
     } else if (custom_id.startsWith('variation_')) {
-      const date = DateTime.fromISO(custom_id.slice(10), { zone: 'America/Los_Angeles' });
-      if (interaction.data.component_type !== ComponentType.StringSelect) {
-        throw new Error('Unknown component type: ' + interaction.data.component_type);
+    } else if (custom_id.startsWith('rollback_')) {
+      const deployId = custom_id.slice(9);
+      if (!isPlutoy) {
+        return InteractionResponse({
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: {
+            content: 'Only Plutoy can perform a rollback',
+            flags: MessageFlags.SuppressNotifications,
+          },
+        });
       }
-      const variOpt = interaction.data.values[0];
-      const variation = parseInt(variOpt);
-
-      setDailyConfig(redis, date, { variation }, member.user.id);
-
-      // interaction.message.content
-      const rememberWordIndex = interaction.message.content.indexOf('Remember');
-      const newContent =
-        interaction.message.content.slice(0, rememberWordIndex - 2) +
-        'Variation set as ' +
-        formatField('variation', variation) +
-        '\n\n' +
-        interaction.message.content.slice(rememberWordIndex);
+      const deployUrl = `https://${deployId}.sky-shardfig.pages.dev/minified.json`;
+      const res = await fetch(deployUrl);
+      const data = (await res.json()) as RemoteConfigResponse;
 
       return InteractionResponse({
-        type: InteractionResponseType.UpdateMessage,
-        data: { content: newContent, embeds: [], components: [] },
+        type: InteractionResponseType.ChannelMessageWithSource,
+        data: {
+          content: 'Rollback confirmation\n```json\n' + JSON.stringify(data, null, 2) + '\n```',
+          components: [
+            {
+              type: ComponentType.ActionRow,
+              components: [
+                new ButtonBuilder()
+                  .setCustomId(`confirm_rollback_${deployId}`)
+                  .setLabel('Confirm')
+                  .setStyle(ButtonStyle.Success)
+                  .toJSON(),
+                new ButtonBuilder()
+                  .setCustomId('rollback_cancel')
+                  .setLabel('Cancel')
+                  .setStyle(ButtonStyle.Danger)
+                  .toJSON(),
+              ],
+            },
+          ],
+        },
       });
-    } else if (custom_id.startsWith('rollback_')) {
+    } else if (custom_id.startsWith('confirm_rollback_')) {
       const deployId = custom_id.slice(9);
       if (!isPlutoy) {
         return InteractionResponse({
