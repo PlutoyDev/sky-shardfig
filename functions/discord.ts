@@ -1020,20 +1020,9 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         body: {
           content:
             `<@${member.user.id}> Reminder for ${date.toISODate()}\n` +
-            `${shardInfo.isRed ? 'Red' : 'Black'} Shard just landed in ${stringsEn.skyMaps[shardInfo.map as keyof typeof stringsEn.skyMaps]} and will be available until ${shardInfo.occurrences[0].end.toFormat("'<t:'X':t>'")}`,
+            `${shardInfo.isRed ? 'Red' : 'Black'} Shard just landed in ${stringsEn.skyMaps[shardInfo.map as keyof typeof stringsEn.skyMaps]} and will be available until ${shardInfo.occurrences[0].end.toFormat("'<t:'X':t>'")}\n` +
+            'Use the </remind_me:1251787925998403594> command to set more reminders',
           allowed_mentions: { users: [member.user.id] },
-          components: [
-            {
-              type: ComponentType.ActionRow,
-              components: [
-                new ButtonBuilder()
-                  .setCustomId(`remind_${date.plus({ days: 1 }).toISODate()}`)
-                  .setLabel('Remind me tomorrow')
-                  .setStyle(ButtonStyle.Primary)
-                  .toJSON(),
-              ],
-            },
-          ],
         } satisfies RESTPostAPIWebhookWithTokenJSONBody,
       });
 
