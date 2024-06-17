@@ -683,7 +683,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
             );
           }
 
-          editStr += '\n\nRemember to </publish:1219872570669531247> the after your changes are completed';
+          editStr += '\n\nRemember to </publish:1219872570669531247> after your changes are completed';
 
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
