@@ -958,9 +958,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
       const rollbackUrl = `https://api.cloudflare.com/client/v4/accounts/${context.env.CLOUDFLARE_ACCOUNT_ID}/pages/projects/sky-shardfig/deployments/${deployId}/rollback`;
       const res = await fetch(rollbackUrl, {
         method: 'POST',
-        headers: {
-          'X-Auth-Key': context.env.CLOUDFLARE_API_TOKEN,
-        },
+        headers: { Authorization: 'Bearer ' + context.env.CLOUDFLARE_API_TOKEN },
       });
 
       interface RollbackResponse {
