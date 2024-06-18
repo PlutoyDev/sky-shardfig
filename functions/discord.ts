@@ -955,8 +955,8 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           ],
         },
       });
-    } else if (custom_id.startsWith('confirm_rollback_')) {
-      const deployId = custom_id.slice(9);
+    } else if (custom_id.startsWith('cfm_rollback_')) {
+      const deployId = custom_id.slice(13);
       if (!isPlutoy) {
         return InteractionResponse({
           type: InteractionResponseType.ChannelMessageWithSource,
