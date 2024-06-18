@@ -986,6 +986,14 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           },
         });
       }
+    } else if (custom_id === 'rollback_cancel') {
+      return InteractionResponse({
+        type: InteractionResponseType.UpdateMessage,
+        data: {
+          content: 'Rollback has been cancelled',
+          components: [],
+        },
+      });
     } else if (custom_id.startsWith('remind_')) {
       const date = DateTime.fromISO(custom_id.slice(7), { zone: 'America/Los_Angeles' });
       const shardInfo = getShardInfo(date);
