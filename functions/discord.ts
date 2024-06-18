@@ -906,6 +906,28 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         throw new Error('Unknown component type: ' + interaction.data.component_type);
       }
     } else if (custom_id.startsWith('variation_')) {
+      const date = DateTime.fromISO(custom_id.slice(10), { zone: 'America/Los_Angeles' });
+      if (interaction.data.component_type !== ComponentType.StringSelect) {
+        throw new Error('Unknown component type: ' + interaction.data.component_type);
+      }
+      const variOpt = interaction.data.values[0];
+      const variation = parseInt(variOpt);
+
+      setDailyConfig(redis, date, { variation }, member.user.id);
+
+      // interaction.message.content
+      const rememberWordIndex = interaction.message.content.indexOf('Remember');
+      const newContent =
+        interaction.message.content.slice(0, rememberWordIndex - 2) +
+        'Variation set as ' +
+        formatField('variation', variation) +
+        '\n\n' +
+        interaction.message.content.slice(rememberWordIndex);
+
+      return InteractionResponse({
+        type: InteractionResponseType.UpdateMessage,
+        data: { content: newContent, embeds: [], components: [] },
+      });
     } else if (custom_id.startsWith('rollback_')) {
       const deployId = custom_id.slice(9);
       if (!isPlutoy) {
