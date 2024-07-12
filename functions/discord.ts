@@ -808,9 +808,11 @@ export const onRequestPost: PagesFunction<Env> = async context => {
         );
         if (confirmingUser === null) {
           return InteractionResponse({
-            type: InteractionResponseType.ChannelMessageWithSource,
+            type: InteractionResponseType.UpdateMessage,
             data: {
               content: 'This publish request has expired',
+              embeds: [],
+              components: [],
             },
           });
         }
@@ -819,7 +821,8 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           return InteractionResponse({
             type: InteractionResponseType.ChannelMessageWithSource,
             data: {
-              content: 'This publish request has to be confirmed by the original requester',
+              content: 'This publish request has to be confirmed/cancelled by the original requester',
+              flags: MessageFlags.Ephemeral,
             },
           });
         }
