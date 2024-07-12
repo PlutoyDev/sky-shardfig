@@ -9,8 +9,8 @@ devDependencies:
     specifier: ^4.20240502.0
     version: 4.20240502.0
   '@discordjs/builders':
-    specifier: ^1.8.0
-    version: 1.8.0
+    specifier: ^1.8.2
+    version: 1.8.2
   '@discordjs/rest':
     specifier: ^2.3.0
     version: 2.3.0
@@ -24,11 +24,11 @@ devDependencies:
     specifier: ^20.12.8
     version: 20.12.8
   '@upstash/qstash':
-    specifier: ^2.5.4
-    version: 2.5.4
+    specifier: ^2.6.1
+    version: 2.6.1
   '@upstash/redis':
-    specifier: ^1.30.1
-    version: 1.30.1
+    specifier: ^1.32.0
+    version: 1.32.0
   axios:
     specifier: ^1.6.8
     version: 1.6.8
@@ -36,8 +36,8 @@ devDependencies:
     specifier: ^8.2.2
     version: 8.2.2
   discord-api-types:
-    specifier: ^0.37.83
-    version: 0.37.83
+    specifier: ^0.37.92
+    version: 0.37.92
   luxon:
     specifier: ^3.4.4
     version: 3.4.4
@@ -193,8 +193,8 @@ packages:
     resolution: {integrity: sha512-OB1jIyPOzyOcuZFHWhsQnkRLN6u8+jmU9X3T4KZlGgn3Ivw8pBiswhLOp+yFeChR3Y4/5+V0hPFRko5SReordg==}
     dev: true
 
-  /@discordjs/builders@1.8.0:
-    resolution: {integrity: sha512-NHj5LucA0Td8g0RMbMP6wfvra4QRyvKp7bE/PEMACGcfsaZkqCi4zPZ83vvkaiqRKVhyoFgRWx9f6ZWtaeM/ww==}
+  /@discordjs/builders@1.8.2:
+    resolution: {integrity: sha512-6wvG3QaCjtMu0xnle4SoOIeFB4y6fKMN6WZfy3BMKJdQQtPLik8KGzDwBVL/+wTtcE/ZlFjgEk74GublyEVZ7g==}
     engines: {node: '>=16.11.0'}
     dependencies:
       '@discordjs/formatters': 0.4.0
@@ -316,15 +316,15 @@ packages:
       undici-types: 5.26.5
     dev: true
 
-  /@upstash/qstash@2.5.4:
-    resolution: {integrity: sha512-3/JTwW8Kyt5Pqz7h8fuU1vd+ZKdYSkR/suZ5IrFLALeqeenVYQVauz8tTH+jLB1fKZtqITcTjxrS0S9F/4ZbhQ==}
+  /@upstash/qstash@2.6.1:
+    resolution: {integrity: sha512-tkz1Y4kmLyNc0TPwIU0ehZlII3KPek5zgklMf8LjVDMaxFqVPatyP/v+mU9C5+opaKiJKpK9usQ+b7MbMy5ywg==}
     dependencies:
       crypto-js: 4.2.0
       jose: 5.4.0
     dev: true
 
-  /@upstash/redis@1.30.1:
-    resolution: {integrity: sha512-Cmk2cvm1AcD6mKLg/UFhQDzM+H1HsX/k5ufvNL4Kii8DsMTKmadMJ1rRZEGQ/SM7H51EeOL/YSa6K2EPc1SYPA==}
+  /@upstash/redis@1.32.0:
+    resolution: {integrity: sha512-KBzCjOgF9mhNcV4HTz7U8g7QTdLVEKi1sSe/97u0E+HkzdPmDt3j9lIPIHEUJz6RrdVH6s4HW4JcPvMLC7w3ew==}
     dependencies:
       crypto-js: 4.2.0
     dev: true
@@ -467,6 +467,10 @@ packages:
 
   /discord-api-types@0.37.83:
     resolution: {integrity: sha512-urGGYeWtWNYMKnYlZnOnDHm8fVRffQs3U0SpE8RHeiuLKb/u92APS8HoQnPTFbnXmY1vVnXjXO4dOxcAn3J+DA==}
+    dev: true
+
+  /discord-api-types@0.37.92:
+    resolution: {integrity: sha512-7xnedbQRLRef/O+4jKPyIFwl6YqoyihOG3OSneiRmVJMBk30ph2YuZGcHjeX1Kk/a3yQWeyCKe4RZJB3iECcxg==}
     dev: true
 
   /emoji-regex@8.0.0:
