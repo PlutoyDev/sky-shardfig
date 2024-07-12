@@ -84,13 +84,13 @@ try {
   if (rescan) {
     // Refetch all dates
     const keys = new Set<string>();
-    let cursor = 0;
+    let cursor: string = '0';
     log(`Scanning keys`);
     do {
       const [next, ks] = await redis.scan(cursor, { match: 'daily:*', count: 1000 });
       cursor = next;
       ks.forEach(k => keys.add(k));
-    } while (cursor !== 0);
+    } while (cursor !== '0');
 
     log(`Scanned ${keys.size} keys`);
     fetchDates = [];
