@@ -401,7 +401,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
           }
 
           const [prevConfirmingUser] = await Promise.all([
-            redis.set('publish_confirmation_user', member.user.id, { get: true, ex: 600 }),
+            redis.set('publish_confirmation_user', member.user.id, { get: true }),
             redis.get<string | null>('qstash_message_id').then(id => (id ? qstash.messages.delete(id) : undefined)),
             qstash
               .publishJSON({
