@@ -270,8 +270,8 @@ export async function setDailyConfig(
   const editedConfigKeys = Object.keys(configSet);
 
   return Promise.all([
-    editedConfigKeys.length > 1 ? redis.hset(hashKey, configSet) : Promise.resolve(),
-    deletingField.length > 1 ? redis.hdel(hashKey, ...deletingField) : Promise.resolve(),
+    editedConfigKeys.length > 0 ? redis.hset(hashKey, configSet) : Promise.resolve(),
+    deletingField.length > 0 ? redis.hdel(hashKey, ...deletingField) : Promise.resolve(),
   ]);
 }
 
