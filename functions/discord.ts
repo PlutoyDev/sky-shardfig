@@ -353,7 +353,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
   const { guild_id, channel, member } = interaction;
 
-  if (!guild_id || !member || guild_id !== '1219255956207046727') {
+  if (!guild_id || !member || !['1219255956207046727', '704686535714406420'].includes(guild_id)) {
     return InteractionResponse({
       type: InteractionResponseType.ChannelMessageWithSource,
       data: {
@@ -384,7 +384,7 @@ export const onRequestPost: PagesFunction<Env> = async context => {
       const optionsMap = new Map(options?.map(option => [option.name, option]));
       console.log('Slash Command: ' + name, optionsMap);
 
-      if (channel?.id === '1219629213238296676') {
+      if (channel?.id && ['1219629213238296676', '1268181783166455809'].includes(channel.id)) {
         // Publish Command
         if (name === 'publish') {
           const rescanFlag = (optionsMap.get('rescan') as APIApplicationCommandInteractionDataBooleanOption | undefined)
@@ -989,6 +989,12 @@ export const onRequestPost: PagesFunction<Env> = async context => {
             content: 'Only Plutoy can perform a rollback',
             flags: MessageFlags.SuppressNotifications,
           },
+        });
+      }
+      if (!context.env.CLOUDFLARE_ACCOUNT_ID || !context.env.CLOUDFLARE_API_TOKEN) {
+        return InteractionResponse({
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: { content: 'Rollback failed: \nMissing Token' },
         });
       }
       const rollbackUrl = `https://api.cloudflare.com/client/v4/accounts/${context.env.CLOUDFLARE_ACCOUNT_ID}/pages/projects/sky-shardfig/deployments/${deployId}/rollback`;

@@ -97,6 +97,7 @@ try {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
 
   const guildId = '1219255956207046727';
+  // const guildId = '704686535714406420'; // personal
   const res = (await rest.put(Routes.applicationGuildCommands(process.env.DISCORD_CLIENT_ID, guildId), {
     body: commands,
   })) as RESTPutAPIApplicationGuildCommandsResult;
