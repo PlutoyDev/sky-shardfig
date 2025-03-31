@@ -140,7 +140,8 @@ try {
 
   // create a smaller version of the response with only the last 3 days
   const last3DaysMap: Record<string, DailyConfig> = {};
-  isoDates.forEach(date => {
+  const last3Days = Array.from({ length: 3 }, (_, i) => DateTime.now().minus({ days: i }).toISODate());
+  last3Days.forEach(date => {
     const daily = dailiesMap[date];
     if (daily) {
       last3DaysMap[date] = daily;
