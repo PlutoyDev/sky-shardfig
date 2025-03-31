@@ -272,7 +272,21 @@ export async function setDailyConfig(
   return Promise.all([
     editedConfigKeys.length > 0 ? redis.hset(hashKey, configSet) : Promise.resolve(),
     deletingField.length > 0 ? redis.hdel(hashKey, ...deletingField) : Promise.resolve(),
+    pushUpdatedIsoDate(redis, date),
   ]);
+}
+
+export function pushUpdatedIsoDate(redis: Redis, date: DateTime) {
+  const isoDate = date.toISODate();
+  return redis.sadd('updated_dates', isoDate);
+}
+
+export function getUpdatedIsoDate(redis: Redis) {
+  return redis.smembers('updated_dates');
+}
+
+export function flushUpdatedIsoDate(redis: Redis) {
+  return redis.del('updated_dates');
 }
 
 export async function pushAuthorName(redis: Redis, authorId: string, authorName: string) {

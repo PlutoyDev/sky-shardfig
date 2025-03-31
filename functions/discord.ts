@@ -44,6 +44,8 @@ import {
   warnings,
   clearWarning,
   RemoteConfigResponse,
+  getResponse,
+  getUpdatedIsoDate,
 } from '../shared/lib.js';
 
 interface Env {
@@ -457,10 +459,10 @@ export const onRequestPost: PagesFunction<Env> = async context => {
             });
           }
 
-          const last3IsoDates = Array.from({ length: 3 }, (_, i) => DateTime.now().minus({ days: i }).toISODate());
+          const isoDates = await getUpdatedIsoDate(redis);
           const [dailyConfigs, prevConfig] = await Promise.all([
-            Promise.all(last3IsoDates.map(date => getParsedDailyConfig(redis, date))),
-            redis.get<RemoteConfigResponse>('outCache'),
+            Promise.all(isoDates.map(date => getParsedDailyConfig(redis, date))),
+            getResponse(redis),
           ]);
 
           if (dailyConfigs.every(c => !c)) {
@@ -472,12 +474,12 @@ export const onRequestPost: PagesFunction<Env> = async context => {
 
           content += 'The following are the current configurations:\n\n';
 
-          for (let i = 0; i < 3; i++) {
+          for (let i = 0; i < 10; i++) {
             const c = dailyConfigs[i];
             if (!c) continue;
-            content += `For **${last3IsoDates[i]}**\n`;
+            content += `For **${isoDates[i]}**\n`;
             // Check for changes
-            const prevC = prevConfig?.dailiesMap[last3IsoDates[i]];
+            const prevC = prevConfig?.dailiesMap[isoDates[i]];
             if (c.memory !== undefined) {
               content += 'Memory: ';
               if (prevC && prevC.memory !== undefined && c.memory !== prevC.memory) {

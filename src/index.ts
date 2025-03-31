@@ -20,6 +20,8 @@ import {
   getWarning,
   getResponse,
   sendResponse,
+  getUpdatedIsoDate,
+  flushUpdatedIsoDate,
 } from '../shared/lib.js';
 
 const envRequired = [
@@ -77,10 +79,9 @@ try {
   );
 
   const webhookMessageId = res.data.id;
+  const [isoDates, rescan] = await Promise.all([getUpdatedIsoDate(redis), redis.get('publish_rescan')]);
 
-  const last3Days = Array.from({ length: 3 }, (_, i) => DateTime.now().minus({ days: i }).toISODate());
   let fetchDates: string[];
-  const rescan = await redis.get('publish_rescan');
   if (rescan) {
     // Refetch all dates
     const keys = new Set<string>();
@@ -101,7 +102,7 @@ try {
 
     redis.del('publish_rescan');
   } else {
-    fetchDates = last3Days;
+    fetchDates = isoDates;
   }
 
   log('Fetching redis data');
@@ -139,7 +140,7 @@ try {
 
   // create a smaller version of the response with only the last 3 days
   const last3DaysMap: Record<string, DailyConfig> = {};
-  last3Days.forEach(date => {
+  isoDates.forEach(date => {
     const daily = dailiesMap[date];
     if (daily) {
       last3DaysMap[date] = daily;
@@ -190,7 +191,7 @@ try {
   const deployId = process.env.CF_PAGES_URL ? new URL(process.env.CF_PAGES_URL).hostname.split('.')[0] : undefined;
 
   log('Deploy ID: ' + deployId);
-
+  await flushUpdatedIsoDate(redis);
   // Edit the webhook message to include the logs
   await axios.patch(process.env.DISCORD_WEBHOOK_URL + '/messages/' + webhookMessageId, {
     content:
