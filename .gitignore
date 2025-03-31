@@ -7,3 +7,5 @@ dist/*
 !dist/index.html
 .env
 tsconfig.tsbuildinfo
+.wrangler
+.dev.vars
